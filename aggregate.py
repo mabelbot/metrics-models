@@ -1,11 +1,14 @@
 import yaml
 import elasticsearch
 from elasticsearch import Elasticsearch, RequestsHttpConnection
+from elasticsearch import helpers
 from dateutil import parser
 from datetime import datetime
 import itertools
 import collections
 import logging
+
+MAX_BULK_UPDATE_SIZE = 100
 
 print(elasticsearch.__version__)
 
@@ -17,26 +20,34 @@ logging.basicConfig(filename='conversion_rate.log', filemode='w',
 logging.info('Begin aggregate.py')
 
 # TODO
+# Introduce secondary filtering for D levels
+# Write back into index
 # Deal with issues -> pull requests later. Focus on D1 and D0 first of all as those are the easiest.
-# Put logging into this module
-# Put other config file into this module
 # Config file for d0 d1, etc
 # Check imports are compatible with versions (requirementx)
 # Turn in memory to in-database for performance? Turn into batch processing?
 # Turn this into a class
-# Introduce conf
 # Write tests
 # Optimize runtime for larger datasets
 # Allow D cutoffs to be not just numerical but include types of activities as well
 # Put results back into elasticsearch for visualization later
 # specify docstrings fully, refactor d cutoff methods
 # Follow sphinx documentation style
+# Manage default number of shards
 
+
+# Import Config File
 CONF = yaml.safe_load(open('conf.yaml'))
 params = CONF['conversion-params']
-print(CONF['conversion-params'])
+
+# Set Parameters from Imported Config File
 D1_CUTOFF = params['d1-cutoff']
 D2_CUTOFF = params['d2-cutoff']
+OUT_INDEX_NAME = params['final-out-index']
+
+# Make sure index clean before use if exists (syntax will be different in ES v. 8+)
+es.indices.delete(index=OUT_INDEX_NAME, ignore=[400, 404])
+
 
 # Query filter by author
 query = {
@@ -148,6 +159,7 @@ def calculate_cr_series(numerators, denominators):
     """
     Calculate a series of conversion rates at fixed intervals by comparing contributors
     at different levels after a certain time interval.
+    Reindex the result.
 
     Numerators = level to
     Denominators = level from
@@ -178,9 +190,18 @@ def calculate_cr_series(numerators, denominators):
 
         # Append tuple of conversion rate UP to this date.
         cr_series.append((date, len(converters) / len(denominators[timestamps[i]])))
+        doc = {
+            "_index": OUT_INDEX_NAME,
+            "_type": "_doc",
+            "_source": {
+                'date_of_conversion': date,
+                'conversion_rate': len(converters) / len(denominators[timestamps[i]])
+            }
+        }
+        yield doc
 
     return cr_series
 
 
 d2, d1 = get_contributors()  # Returns numerator, denominator (convert to, convert from)
-result = calculate_cr_series(d2, d1)
+helpers.bulk(es, calculate_cr_series(d2, d1))
