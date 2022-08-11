@@ -1,0 +1,40 @@
+url: "http://localhost:9200" # make sure this is http
+
+general:
+    json_file: projects.json
+
+tracking-params:
+    tracking_period_length: 60
+    from_date: '1970-01-01'
+    lag_time_length: 90
+
+conversion-params:
+    d1-cutoff: 2
+    d2-cutoff: 10 
+
+github-params:        
+#    'issue_index': Issue index
+#    'json_file': json file for repos messages
+#    'git_index': git index
+    'github_index': github_issues_chaoss_enriched
+    'githubql_index': github_event_enriched
+#    'git_branch': None
+#    'from_date': '2020-01-01'
+#    'end_date': None
+    'github_out_index': github_event_enriched_combined
+#    'community': None
+    'level': 'repo'
+    'use_issues': True
+    'use_prs': False
+    'event_types': ['CreatedEvent', 'AddedToProjectEvent', 'ClosedEvent', 'LabeledEvent']
+    'd0_d1_cutoff_num_contributions': 10
+    # 'use_CreatedEvent': True
+    # 'use_AddedToProjectEvent': True
+    # 'use_ClosedEvent': True
+    # 'use_CrossReferencedEvent': True
+    # 'use_LabeledEvent': True
+    # 'use_MovedColumnsInProjectEvent': True
+    # 'use_RemovedFromProjectEvent': True
+    # 'use_UnlabeledEvent': True
+
+

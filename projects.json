@@ -1,0 +1,10 @@
+{
+    "test": {
+        "github": [
+            "https://github.com/chaoss/augur"
+        ],
+        "githubql": [
+            "https://github.com/chaoss/augur"
+        ]
+    }
+}
