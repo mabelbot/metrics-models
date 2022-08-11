@@ -87,12 +87,14 @@ sort = {
     "grimoire_creation_date": {"order": "asc"}
 }
 
-time_buckets = \
-    es.search(index="github_event_enriched_combined", size=2, query=query, sort=sort, aggs=aggs)['aggregations'][
-        'contribs_over_time']['buckets']
+time_buckets = es.search(index="github_event_enriched_combined",
+                         size=2,
+                         query=query,
+                         sort=sort,
+                         aggs=aggs)['aggregations']['contribs_over_time']['buckets']
 
 
-def contributors_d1(bucket_data):
+def contributors_filtered_by_cutoff(bucket_data, cutoff):
     """
     Given bucket_data from the correct interval over which to assess,
     First groups all contributions by UUID, then filters to return only those contributors above D0 Cutoff
@@ -100,6 +102,7 @@ def contributors_d1(bucket_data):
 
     :param bucket_data: list of dict[str, int] objects of the form {'key': str key, 'doc_count': x} corresponding to one
         or more combined elasticsearch time interval buckets
+    :param cutoff: integer cutoff to filter contributions
     :returns: dict[str, int] where the keys are uuid and the values are number of contributions
         dict can be empty if the input is empty
     :raises IndexError: if bucket_data is ill formed or empty
@@ -108,19 +111,7 @@ def contributors_d1(bucket_data):
     contributions_by_uuid = list(dict((key, sum([pair['doc_count'] for pair in group])) for key, group in
                                       itertools.groupby(bucket_data, lambda user: user['key'])).items())
 
-    return dict(filter(lambda x: int(x[1]) > D1_CUTOFF, contributions_by_uuid))
-
-
-def contributors_d2(bucket_data):
-    """
-    Given bucket_data from the correct interval over which to assess,
-    First groups all contributions by UUID, then filters to return only those contributors above D0 Cutoff
-    """
-    bucket_data.sort(key=lambda user: user['key'])
-    contributions_by_uuid = list(dict((key, sum([pair['doc_count'] for pair in group])) for key, group in
-                                      itertools.groupby(bucket_data, lambda user: user['key'])).items())
-
-    return dict(filter(lambda x: int(x[1]) > D2_CUTOFF, contributions_by_uuid))
+    return dict(filter(lambda x: int(x[1]) > cutoff, contributions_by_uuid))
 
 
 def get_contributors():  # TODO allow options
@@ -144,11 +135,11 @@ def get_contributors():  # TODO allow options
         cumulative_bucket_authors.extend(result['actor']['buckets'])
 
         # info: get list of cumulative contributions as pairs of author uuid/count if they are over the d0 cutoff
-        d1 = contributors_d1(cumulative_bucket_authors)
+        d1 = contributors_filtered_by_cutoff(cumulative_bucket_authors, D1_CUTOFF)
         denominators[bucket_start_date] = d1
 
         if i > 0:
-            d2 = contributors_d2(cumulative_bucket_authors)
+            d2 = contributors_filtered_by_cutoff(cumulative_bucket_authors, D2_CUTOFF)
             numerators[bucket_start_date] = d2
     return numerators, denominators
 
