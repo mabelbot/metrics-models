@@ -28,7 +28,9 @@ logging.info('Begin aggregate.py')
 # Write tests
 # Optimize runtime for larger datasets
 # Allow D cutoffs to be not just numerical but include types of activities as well
-# TODO specify docstrings
+# Put results back into elasticsearch for visualization later
+# specify docstrings fully, refactor d cutoff methods
+# Follow sphinx documentation style
 
 CONF = yaml.safe_load(open('conf.yaml'))
 params = CONF['conversion-params']
@@ -94,6 +96,13 @@ def contributors_d1(bucket_data):
     """
     Given bucket_data from the correct interval over which to assess,
     First groups all contributions by UUID, then filters to return only those contributors above D0 Cutoff
+
+
+    :param bucket_data: list of dict[str, int] objects of the form {'key': str key, 'doc_count': x} corresponding to one
+        or more combined elasticsearch time interval buckets
+    :returns: dict[str, int] where the keys are uuid and the values are number of contributions
+        dict can be empty if the input is empty
+    :raises IndexError: if bucket_data is ill formed or empty
     """
     bucket_data.sort(key=lambda user: user['key'])
     contributions_by_uuid = list(dict((key, sum([pair['doc_count'] for pair in group])) for key, group in
