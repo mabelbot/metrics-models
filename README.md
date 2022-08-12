@@ -8,10 +8,8 @@ The `conf.yaml` file controls all the parameters and pre-processing filters for 
 **[url:]** Connection string. Example: "https://user:password@ip:port" (Required)
 
 **[general:]**
-
     - **json_file:** json File that contains projects and repositories to analyze (similar to GrimoireLab's `projects.json`)
     
-    ...under constructio
 
 
 # Conversion Rate Enricher Info
