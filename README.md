@@ -23,6 +23,10 @@ General info about this enricher:
 This enricher is used for calculating the Conversion Rate metric model. It is best used in conjunction with enrichers for other platforms, e.g. other than Github. This is the Github enricher. 
 
 Rich data obtained from raw:
+- Github
+    - 
+- GithubQL (Events)
+- Github2 
 - Processes the following information about issues: 
     - Issue author, issue author date/time.
     - Issue events, their Github login and also date of event occurrence obtained through the timeline
