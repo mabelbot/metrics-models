@@ -1,5 +1,5 @@
 # Metrics Model - Conversion Rate
-Based on Metrics Model package in progress - Metrics Model makes metrics combine metrics together, you could find us [here](https://github.com/chaoss/wg-metrics-models) 
+Based on Metrics Model package in progress - Metrics Model makes metrics combine metrics together, you could find us [here](https://github.com/chaoss/wg-metrics-models). This readme inspired by [Sir Mordred](https://github.com/chaoss/grimoirelab-tutorial/blob/master/docs/getting-started/setup-cfg.md). 
 
 ## conf.yaml (Configuration File)
 
