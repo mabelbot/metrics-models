@@ -194,13 +194,13 @@ def calculate_cr_series(numerators, denominators):
         print(f"converters {date}: {converters}")
 
         # Append tuple of conversion rate UP to this date.
-        cr_series.append((date, len(converters) / len(denominators[timestamps[i]])))
+        cr_series.append((date, len(converters) / len(denominators[timestamps[i]])) if len(denominators[timestamps[i]]) else 0)
         doc = {
             "_index": OUT_INDEX_NAME,
             "_type": "_doc",
             "_source": {
                 'date_of_conversion': date,
-                'conversion_rate': len(converters) / len(denominators[timestamps[i]])
+                'conversion_rate': len(converters) / len(denominators[timestamps[i]]) if len(denominators[timestamps[i]]) else 0
             }
         }
         yield doc
