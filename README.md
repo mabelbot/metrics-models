@@ -1,27 +1,18 @@
 ## Metrics Model - Conversion Rate
 Based on Metrics Model package in progress - Metrics Model makes metrics combine metrics together, you could find us [here](https://github.com/chaoss/wg-metrics-models) 
 
-### please create conf.yaml file as following way:
+### conf.yaml File
 
-    url:
-        "https://user:password@ip:port"  
-    params: 
-        {
-        'issue_index': Issue index  
-        'json_file': json file for repos messages
-        'git_index':  git index 
-        'git_branch': None,
-        'from_date': the beginning of time for metric model
-        'end_date': the end of time for metric model
-        'out_index': new index for metric model
-        'community': the name of community
-        'level': representation of the metrics, choose from repo, project, community.
-        }
+The `conf.yaml` file controls all the parameters and pre-processing filters for calculating the constituent metrics and also for the metric model algorithm. It is divided into sections that control different parts of the workflow. 
 
-params is designed to init Metric Model. 
+**[url:]** Connection string. Example: "https://user:password@ip:port" (Required)
+**[general:]**
+    - **json_file:** json File that contains projects and repositories to analyze (similar to GrimoireLab's `projects.json`)
+    
+    ...under constructio
 
 
-# Element
+# Conversion Rate Enricher Info
 General info about this enricher: 
 This enricher is used for calculating the Conversion Rate metric model. It is best used in conjunction with enrichers for other platforms, e.g. other than Github. This is the Github enricher. 
 
