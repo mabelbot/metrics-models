@@ -1,6 +1,8 @@
 # Metrics Model - Conversion Rate
 Based on Metrics Model package in progress - Metrics Model makes metrics combine metrics together, you could find us [here](https://github.com/chaoss/wg-metrics-models). This readme inspired by [Sir Mordred](https://github.com/chaoss/grimoirelab-tutorial/blob/master/docs/getting-started/setup-cfg.md). 
 
+Currently produces a visualization of numerical conversion rate calculated at regular intervals over time, as well as a list of converted individuals (as uuids). 
+
 ## conf.yaml (Configuration File)
 
 The `conf.yaml` file controls all the parameters and pre-processing filters for calculating the constituent metrics and also for the metric model algorithm. It is divided into sections that control different parts of the workflow. 
@@ -24,7 +26,7 @@ This enricher is used for calculating the Conversion Rate metric model. It is be
 
 Rich data obtained from raw:
 - Github
-    - 
+    - Test
 - GithubQL (Events)
 - Github2 
 - Processes the following information about issues: 
