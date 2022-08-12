@@ -5,9 +5,10 @@ Based on Metrics Model package in progress - Metrics Model makes metrics combine
 
 The `conf.yaml` file controls all the parameters and pre-processing filters for calculating the constituent metrics and also for the metric model algorithm. It is divided into sections that control different parts of the workflow. 
 
-### [url:] Connection string. Example: "https://user:password@ip:port" (Required)
+### [url:] 
+    - **url:** Connection string. Example: "https://user:password@ip:port" (Required)
 
-### [general]
+### [general:]
 
     - **json_file:** json File that contains projects and repositories to analyze (similar to GrimoireLab's `projects.json`)
     
