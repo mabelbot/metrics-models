@@ -1,7 +1,7 @@
 # Metrics Model - Conversion Rate
 Based on Metrics Model package in progress - Metrics Model makes metrics combine metrics together, you could find us [here](https://github.com/chaoss/wg-metrics-models) 
 
-## conf.yaml File
+## conf.yaml (Configuration File)
 
 The `conf.yaml` file controls all the parameters and pre-processing filters for calculating the constituent metrics and also for the metric model algorithm. It is divided into sections that control different parts of the workflow. 
 
