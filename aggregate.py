@@ -48,7 +48,6 @@ OUT_INDEX_NAME = params['final-out-index']
 # Make sure index clean before use if exists (syntax will be different in ES v. 8+)
 es.indices.delete(index=OUT_INDEX_NAME, ignore=[400, 404])
 
-
 # Query filter by author
 query = {
     "bool": {
@@ -105,10 +104,11 @@ time_buckets = es.search(index="github_event_enriched_combined",
                          aggs=aggs)['aggregations']['contribs_over_time']['buckets']
 
 
-def contributors_filtered_by_cutoff(bucket_data, cutoff):
+def contributors_filtered_by_cutoff(bucket_data, lower_cutoff, upper_cutoff):
     """
     Given bucket_data from the correct interval over which to assess,
-    First groups all contributions by UUID, then filters to return only those contributors above D0 Cutoff
+    First groups all contributions by UUID, then filters to return only those contributors between
+    the lower and upper cutoff (inclusive)
 
 
     :param bucket_data: list of dict[str, int] objects of the form {'key': str key, 'doc_count': x} corresponding to one
@@ -118,11 +118,15 @@ def contributors_filtered_by_cutoff(bucket_data, cutoff):
         dict can be empty if the input is empty
     :raises IndexError: if bucket_data is ill formed or empty
     """
+    if not lower_cutoff:
+        lower_cutoff = 0
+    if not upper_cutoff:
+        upper_cutoff = float("inf")
     bucket_data.sort(key=lambda user: user['key'])
     contributions_by_uuid = list(dict((key, sum([pair['doc_count'] for pair in group])) for key, group in
                                       itertools.groupby(bucket_data, lambda user: user['key'])).items())
 
-    return dict(filter(lambda x: int(x[1]) > cutoff, contributions_by_uuid))
+    return dict(filter(lambda x: lower_cutoff <= int(x[1]) <= upper_cutoff, contributions_by_uuid))
 
 
 def get_contributors():  # TODO allow options
@@ -146,11 +150,11 @@ def get_contributors():  # TODO allow options
         cumulative_bucket_authors.extend(result['actor']['buckets'])
 
         # info: get list of cumulative contributions as pairs of author uuid/count if they are over the d0 cutoff
-        d1 = contributors_filtered_by_cutoff(cumulative_bucket_authors, D1_CUTOFF)
+        d1 = contributors_filtered_by_cutoff(cumulative_bucket_authors, D1_CUTOFF, D2_CUTOFF)
         denominators[bucket_start_date] = d1
 
         if i > 0:
-            d2 = contributors_filtered_by_cutoff(cumulative_bucket_authors, D2_CUTOFF)
+            d2 = contributors_filtered_by_cutoff(cumulative_bucket_authors, D2_CUTOFF, None)
             numerators[bucket_start_date] = d2
     return numerators, denominators
 
@@ -187,6 +191,7 @@ def calculate_cr_series(numerators, denominators):
         # calculated, but somehow ended up in the numerator phase by the time it was calculated
         # This is due to the need to exclude people who have already been participating as conversions. TODO
         converters = numerators[date].keys() & denominators[timestamps[i]].keys()
+        print(f"converters {date}: {converters}")
 
         # Append tuple of conversion rate UP to this date.
         cr_series.append((date, len(converters) / len(denominators[timestamps[i]])))
