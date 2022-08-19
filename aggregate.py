@@ -3,7 +3,8 @@ import elasticsearch
 from elasticsearch import Elasticsearch, RequestsHttpConnection
 from elasticsearch import helpers
 from dateutil import parser
-from datetime import datetime
+from datetime import datetime, timedelta # TODO https://stackoverflow.com/questions/12906402/type-object-datetime-datetime-has-no-attribute-datetime
+from dateutil.relativedelta import *
 import itertools
 import collections
 import logging
@@ -22,7 +23,7 @@ logging.info('Begin aggregate.py')
 # TODO
 # Introduce secondary filtering for D levels
 # Write back into index
-# Deal with issues -> pull requests later. Focus on D1 and D0 first of all as those are the easiest.
+# Deal with issues -> pull requests later.
 # Config file for d0 d1, etc
 # Check imports are compatible with versions (requirementx)
 # Turn in memory to in-database for performance? Turn into batch processing?
@@ -34,6 +35,7 @@ logging.info('Begin aggregate.py')
 # specify docstrings fully, refactor d cutoff methods
 # Follow sphinx documentation style
 # Manage default number of shards
+# Introduce support for day lag
 
 
 # Import Config File
@@ -44,6 +46,16 @@ params = CONF['conversion-params']
 D1_CUTOFF = params['d1-cutoff']
 D2_CUTOFF = params['d2-cutoff']
 OUT_INDEX_NAME = params['final-out-index']
+
+# Number of months to look back for contributor interval
+# This means we have to start this many months after 1970-01-01
+TRACKING_LAG_PERIOD = CONF['tracking-params']['tracking_interval_num_months']
+START_TIME = (datetime.strptime('1970-01-01', "%Y-%m-%d") + relativedelta(months=+6)).strftime("%Y-%m-%d")
+
+print(f"Cutoffs {D1_CUTOFF}, {D2_CUTOFF} / tracking period {TRACKING_LAG_PERIOD} months")
+
+
+# TODO add more options here
 
 # Make sure index clean before use if exists (syntax will be different in ES v. 8+)
 es.indices.delete(index=OUT_INDEX_NAME, ignore=[400, 404])
@@ -57,7 +69,7 @@ query = {
         "filter": [
             {"range": {
                 "grimoire_creation_date": {
-                    "gte": "1970-01-01",
+                    "gte": START_TIME,
                     "lt": datetime.now().strftime("%Y-%m-%d")
                 }
             }
@@ -77,7 +89,7 @@ query = {
 
 
 # Aggregate per month, then aggregate per actor_id
-aggs = {
+aggs_ahead = {
     "contribs_over_time": {
         "date_histogram": {
             "field": "grimoire_creation_date",
@@ -93,15 +105,36 @@ aggs = {
     }
 }
 
+aggs_behind = {
+    "contribs_over_time": {
+        "date_histogram": {
+            "field": "grimoire_creation_date",
+            "interval": "month",
+            "offset": "-1d"
+        },
+        "aggs": {  # 2nd level sub-bucket aggregation
+            "actor": {
+                "terms": {
+                    "field": "actor_id"
+                }
+            }
+        }
+    }
+}
+
 sort = {
     "grimoire_creation_date": {"order": "asc"}
 }
 
+# Note that time buckets will be grouped by a date and a time of 00:00, such as '2016-12-31T00:00:00.000Z'
+# This bucket is a START interval, so it counts everything from that date until the day BEFORE the next
+# bucket's start date, at 11:59pm
+# The offset buckets are all 1 day behind the normal time_buckets
 time_buckets = es.search(index="github_event_enriched_combined",
                          size=2,
                          query=query,
                          sort=sort,
-                         aggs=aggs)['aggregations']['contribs_over_time']['buckets']
+                         aggs=aggs_ahead)['aggregations']['contribs_over_time']['buckets']
 
 
 def contributors_filtered_by_cutoff(bucket_data, lower_cutoff, upper_cutoff):
@@ -130,10 +163,12 @@ def contributors_filtered_by_cutoff(bucket_data, lower_cutoff, upper_cutoff):
 
 
 def get_contributors():  # TODO allow options
-    bucket_start_dates = []
     cumulative_bucket_authors = []
+    cumulative_bucket_authors_offset = []
     numerators = {}
     denominators = {}
+    converters = set()
+    date_of_first_contribution_by_uuid = {}
 
     # Compare bucket i to i-1
     # test: Earliest is 2017-01-20 for Augur, first bucket is 2017-01-01 start
@@ -142,20 +177,32 @@ def get_contributors():  # TODO allow options
     for i, result in enumerate(time_buckets):
         # info: Convert to <class 'datetime.datetime'>
         bucket_start_date = parser.parse(result['key_as_string'])
-
-        # info: Keep track of start dates, especially the one from this
-        bucket_start_dates.append(bucket_start_date)
+        prev_bucket_start_date = parser.parse(time_buckets[i-1]['key_as_string'])
 
         # info: Append the current bucket to the list of cumulative buckets (will have repeats)
         cumulative_bucket_authors.extend(result['actor']['buckets'])
 
-        # info: get list of cumulative contributions as pairs of author uuid/count if they are over the d0 cutoff
-        d1 = contributors_filtered_by_cutoff(cumulative_bucket_authors, D1_CUTOFF, D2_CUTOFF)
+        for j, c in enumerate(result['actor']['buckets']):
+            if c['key'] not in date_of_first_contribution_by_uuid:
+                date_of_first_contribution_by_uuid[c['key']] = bucket_start_date
+
+        # info: get list of cumulative contributions as pairs of author uuid/count if they are in d1 cutoff
+        # d1 is a flat dictionary of uuid: count
+        d1 = contributors_filtered_by_cutoff(cumulative_bucket_authors, D1_CUTOFF, D2_CUTOFF)  # TODO need this cutoff or else will double count in denominator
         denominators[bucket_start_date] = d1
 
         if i > 0:
-            d2 = contributors_filtered_by_cutoff(cumulative_bucket_authors, D2_CUTOFF, None)
-            numerators[bucket_start_date] = d2
+            d2 = contributors_filtered_by_cutoff(cumulative_bucket_authors, D2_CUTOFF + 1, None)
+            # info: Include first time converters only
+            numerators[bucket_start_date] = dict(filter(lambda x: (x[0] not in converters) or date_of_first_contribution_by_uuid[x[0]] == bucket_start_date,
+                                                        d2.items()))
+            # Register first time D2's here
+            first_time_D2 = dict(filter(lambda x: date_of_first_contribution_by_uuid[x[0]] == bucket_start_date,
+                                                        d2.items()))
+            denominators[prev_bucket_start_date].update(first_time_D2) # Add onto the previous denominator dict
+
+            converters.update(d2.keys())
+
     return numerators, denominators
 
 
@@ -190,17 +237,27 @@ def calculate_cr_series(numerators, denominators):
         # This excludes people who did not pass through the denominator phase by the time the denominator was
         # calculated, but somehow ended up in the numerator phase by the time it was calculated
         # This is due to the need to exclude people who have already been participating as conversions. TODO
+        # One person makes > D1 cutoff contributions in their first month, then they're not counted in the denominator?
+        # But if you dont use any cutoff, then you can get the same person converting twice. Which does not make sense.
+        # The third solution is to just count anyone who meets the D2 cutoff over anyone who makes the D1 cutoff but
+        # not the D2 one
+        # So there is an issue of people who never pass through the "new" phase given a certain
+        # cutoff and calculation interval
+        # This line will handle no duplicate conversions after the denominator excludes non-new contributions first
         converters = numerators[date].keys() & denominators[timestamps[i]].keys()
-        print(f"converters {date}: {converters}")
 
         # Append tuple of conversion rate UP to this date.
-        cr_series.append((date, len(converters) / len(denominators[timestamps[i]])) if len(denominators[timestamps[i]]) else 0)
+        cr_series.append((date, len(converters) / len(denominators[timestamps[i]]))
+                         if len(denominators[timestamps[i]]) else 0)
         doc = {
             "_index": OUT_INDEX_NAME,
             "_type": "_doc",
             "_source": {
                 'date_of_conversion': date,
-                'conversion_rate': len(converters) / len(denominators[timestamps[i]]) if len(denominators[timestamps[i]]) else 0
+                'conversion_rate': len(converters) / len(denominators[timestamps[i]])
+                if len(denominators[timestamps[i]]) else float(0),
+                'num_converters': int(len(converters)),
+                'converters': list(converters)
             }
         }
         yield doc
