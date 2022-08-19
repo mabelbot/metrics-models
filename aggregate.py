@@ -7,6 +7,7 @@ from datetime import datetime, timedelta # TODO https://stackoverflow.com/questi
 from dateutil.relativedelta import *
 import itertools
 import collections
+from collections import deque
 import logging
 
 MAX_BULK_UPDATE_SIZE = 100
@@ -69,7 +70,7 @@ query = {
         "filter": [
             {"range": {
                 "grimoire_creation_date": {
-                    "gte": START_TIME,
+                    "gte": '1970-01-01',
                     "lt": datetime.now().strftime("%Y-%m-%d")
                 }
             }
@@ -163,12 +164,12 @@ def contributors_filtered_by_cutoff(bucket_data, lower_cutoff, upper_cutoff):
 
 
 def get_contributors():  # TODO allow options
-    cumulative_bucket_authors = []
-    cumulative_bucket_authors_offset = []
+    cumulative_bucket_authors = []  # TODO transitioning this to a stack.
     numerators = {}
     denominators = {}
     converters = set()
     date_of_first_contribution_by_uuid = {}
+    buckets_in_consideration = deque()  # Contains only data within a Lag Time behind.
 
     # Compare bucket i to i-1
     # test: Earliest is 2017-01-20 for Augur, first bucket is 2017-01-01 start
@@ -179,8 +180,18 @@ def get_contributors():  # TODO allow options
         bucket_start_date = parser.parse(result['key_as_string'])
         prev_bucket_start_date = parser.parse(time_buckets[i-1]['key_as_string'])
 
+        # info: Append the current bucket to the list of buckets in consideration
+        # If stack hits capacity we have to remove the earliest month
+        if len(buckets_in_consideration) >= TRACKING_LAG_PERIOD:
+            popped_item = buckets_in_consideration.popleft()
+            print(f" POPPED ITEM {popped_item}")
+        else:
+            buckets_in_consideration.append(result['actor']['buckets'])
+            print(f"New bucket size is {len(buckets_in_consideration)}")
+
         # info: Append the current bucket to the list of cumulative buckets (will have repeats)
-        cumulative_bucket_authors.extend(result['actor']['buckets'])
+        # cumulative_bucket_authors.extend(result['actor']['buckets'])
+        cumulative_bucket_authors = [val for sublist in list(buckets_in_consideration) for val in sublist]
 
         for j, c in enumerate(result['actor']['buckets']):
             if c['key'] not in date_of_first_contribution_by_uuid:
@@ -199,7 +210,7 @@ def get_contributors():  # TODO allow options
             # Register first time D2's here
             first_time_D2 = dict(filter(lambda x: date_of_first_contribution_by_uuid[x[0]] == bucket_start_date,
                                                         d2.items()))
-            denominators[prev_bucket_start_date].update(first_time_D2) # Add onto the previous denominator dict
+            denominators[prev_bucket_start_date].update(first_time_D2)  # Add onto the previous denominator dict
 
             converters.update(d2.keys())
 
