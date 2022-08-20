@@ -285,6 +285,8 @@ class ConversionRateMetricsModel(MetricsModel):
                     'title': hit['_source.title'],
                     'title_analyzed': hit['_source.title_analyzed'],
                     # TODO deal with assignee 2 way data and other stuff. first we deal with creation contributions
+
+                    # Assign a mock "event type" field for creation events
                     'event_type': 'CreatedPREvent' if hit['_source.pull_request'] else 'CreatedEvent',  # githubql necessary field
                     'created_at': hit['_source.created_at'],  # githubql necessary field - this is the one we'll use for identifying time
                 }
