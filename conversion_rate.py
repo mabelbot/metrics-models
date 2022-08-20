@@ -33,6 +33,7 @@ from elasticsearch import Elasticsearch, RequestsHttpConnection
 from elasticsearch.helpers import scan
 import logging
 
+
 from perceval.backend import uuid
 from grimoire_elk.elastic_mapping import Mapping as BaseMapping #TODO is this import right?
 from grimoire_elk.enriched.utils import get_time_diff_days
@@ -45,12 +46,12 @@ from sortinghat import api
 from sortinghat.db.database import Database
 from sortinghat.matcher import create_identity_matcher
 
-db = Database('root', '', 'test_sh') #TODO
-
-
 from metric_model import MetricsModel
 import metric_model  # myc to import utils at the top - todo will move utils into their own module later
 import identities
+import aggregate
+
+db = Database('root', '', 'test_sh') #TODO
 
 
 MAX_BULK_UPDATE_SIZE = 100 # TODO why does this not match the bulk size in elastic.py?
@@ -79,21 +80,7 @@ TODO: for more actions like commits, more fields might play a role
 
 
 class ConversionRateMetricsModel(MetricsModel):
-    def __init__(self,
-                 repo_index=None,
-                 json_file=None,
-                 git_index=None,
-                 github_index=None,
-                 githubql_index=None,
-                 github_out_index=None,
-                 git_branch=None,
-                 use_issues=False,
-                 use_prs=False,
-                 tracking_period_length=60,
-                 from_date=None,
-                 lag_time_length=0,
-                 community=None,
-                 level=None):
+    def __init__(self, **kwargs):
         """Metrics Model is designed for the integration of multiple CHAOSS metrics. This is the Conversion Rate Metric Model.
         The output is going to be a conversion rate with new contributors during tracking period P and sustained contributors
         assessed at a later fixed time T. User can specify the length of period P in days, a start date for all tracking S,
@@ -111,20 +98,21 @@ class ConversionRateMetricsModel(MetricsModel):
             :param str githubql_index: name of the index that contains the grimoirelab-elk githubql.py enriched data (mixed issues/prs)
 
          """
-        super().__init__(json_file, github_out_index, community, level) #TODO change back to out index
-        self.tracking_period_length = tracking_period_length
-        self.from_date = from_date
-        self.lag_time_length = lag_time_length
+        super().__init__(kwargs.get('json_file'), 
+                            kwargs.get('github_out_index'), 
+                            kwargs.get('community'), 
+                            kwargs.get('level')) #TODO change back to out index
+        self.tracking_period_length = kwargs.get('tracking_period_length')
+        self.from_date = kwargs.get('from_date')
+        self.lag_time_length = kwargs.get('lag_time_length')
 
-        self.github_index = github_index
-        self.githubql_index = githubql_index
-        self.github_out_index = github_out_index
+        self.github_index = kwargs.get('github_index')
+        self.githubql_index = kwargs.get('githubql_index')
+        self.github_out_index = kwargs.get('github_out_index')
         
-        self.github_repos = metric_model.get_all_repo(json_file, 'github') \
-                    + metric_model.get_all_repo(json_file, 'githubql') #Used for filtering repos by what user specifies
+        self.github_repos = metric_model.get_all_repo(kwargs.get('json_file'), 'github') \
+                    + metric_model.get_all_repo(kwargs.get('json_file'), 'githubql') #Used for filtering repos by what user specifies
 
-        self.use_issues = use_issues
-        self.use_prs = use_prs
         # self.issue_index = issue_index
         # self.repo_index = repo_index
         # self.git_index = git_index
@@ -237,12 +225,14 @@ class ConversionRateMetricsModel(MetricsModel):
         item_datas = []
         logging.info('Begin at combine indexes')
 
-        # Append Github data as-is for Event Creation Contributions ---
+        # Append Github data as-is for Event Creation Contributions (this contains PR and issue both) ---
         search = scan(self.es_in,
                       index=self.github_index,
                       query={"query": {"match_all": {}}}
                       )
         hits = []
+        combined_users = set()
+
         for hit in search:
             hits.append(hit)
         
@@ -251,9 +241,11 @@ class ConversionRateMetricsModel(MetricsModel):
 
             if hit['_source.repository'] in self.github_repos: # Only process repos user has specified for analysis
                 # Combine SortingHat uuids for Github w/ Githubql ones
-                identities.combine_identities(hit['_source.user_login'], ['github', 'githubql']) #info: This is only relevant if an identity is present in both GH and GHQL
-                logging.info(f"Combining - {hit['_source.user_login']}")
-                logging.info(api.search_unique_identities(db=db, term=hit['_source.user_login']))
+                if hit['_source.user_login'] not in combined_users:
+                    identities.combine_identities(hit['_source.user_login'], ['github', 'githubql']) #info: This is only relevant if an identity is present in both GH and GHQL
+                    combined_users.add(hit['_source.user_login'])
+                    logging.info(f"Finished combine for this user - {hit['_source.user_login']}")
+                # logging.info(f"Result of combining {api.search_unique_identities(db=db, term=hit['_source.user_login'])}")
                 metrics_data = {
                     # SHARED FIELDS 
                     # '_index': hit['_index'],
@@ -293,7 +285,7 @@ class ConversionRateMetricsModel(MetricsModel):
                     'title': hit['_source.title'],
                     'title_analyzed': hit['_source.title_analyzed'],
                     # TODO deal with assignee 2 way data and other stuff. first we deal with creation contributions
-                    'event_type': 'CreatedEvent',  # githubql necessary field
+                    'event_type': 'CreatedPREvent' if hit['_source.pull_request'] else 'CreatedEvent',  # githubql necessary field
                     'created_at': hit['_source.created_at'],  # githubql necessary field - this is the one we'll use for identifying time
                 }
                 item_datas.append(metrics_data)
@@ -346,7 +338,8 @@ class ConversionRateMetricsModel(MetricsModel):
         if self.level == "repo":
             label="repo" # TODO when to use this?
             self.metrics_model_combine_indexes_github()  # TODO fill in correct arguments
-
+            # d2, d1 = aggregate.get_contributors()  # Returns numerator, denominator (convert to, convert from)
+            # aggregate.calculate_cr_series(d2, d1)  # Bulk update back to specified final index
 
 
 class Mapping(BaseMapping):
