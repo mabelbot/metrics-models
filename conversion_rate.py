@@ -243,8 +243,8 @@ class ConversionRateMetricsModel(MetricsModel):
             if hit['_source.repository'] in self.github_repos: # Only process repos user has specified for analysis
                 # Combine SortingHat uuids for Github w/ Githubql ones
                 if hit['_source.user_login'] not in combined_users:
-                    identities.combine_identities(hit['_source.user_login'], ['github', 'githubql', 'github2']) #info: This is only relevant if an identity is present in both GH and GHQL
-                    combined_users.add(hit['_source.user_login'])
+                    # identities.combine_identities(hit['_source.user_login'], ['github', 'githubql', 'github2']) #info: This is only relevant if an identity is present in both GH and GHQL
+                    # combined_users.add(hit['_source.user_login'])
                     logging.info(f"Finished combine for this user - {hit['_source.user_login']}")
                 # logging.info(f"Result of combining {api.search_unique_identities(db=db, term=hit['_source.user_login'])}")
                 metrics_data = {
@@ -313,12 +313,17 @@ class ConversionRateMetricsModel(MetricsModel):
         for hit in hits_github2:
             hit = json_normalize(hit).to_dict(orient='records')[0]
 
+            # TODO it appears that the value in this field is either 1.0 or nan, meaning the issues themselves are the "nan"
+                # For example https://github.com/chaoss/augur/issues/302	
+            if '_source.is_github_issue_comment' not in hit or hit['_source.is_github_issue_comment']: continue
+
             if hit['_source.repository'] in self.github_repos: # Only process repos user has specified for analysis
                 # Combine SortingHat uuids but only if they have not been combined before to save time
                 if hit['_source.user_login'] not in combined_users:
                     identities.combine_identities(hit['_source.user_login'], ['github', 'githubql', 'github2']) #info: This is only relevant if an identity is present in both GH and GHQL
                     combined_users.add(hit['_source.user_login'])
                     logging.info(f"Finished combine for this user - {hit['_source.user_login']}")
+
                 
                 metrics_data = {
                     # SHARED FIELDS  # TODO remove duplicates (issue again, but comments are new - scenario)
@@ -348,13 +353,14 @@ class ConversionRateMetricsModel(MetricsModel):
                     'project_1': hit['_source.project_1'], # Used if more than one project levels are allowed in the project hierarchy.
                     'pull_request': hit['_source.issue_pull_request'], # Boolean for if this is a PR or not
                     'title': hit['_source.issue_title'],
-                    'title_analyzed': hit['_source.issue_title_analyzed'],
+                    # 'title_analyzed': hit['_source.issue_title_analyzed'], # This column doesn't exist
                     # TODO deal with assignee 2 way data and other stuff. first we deal with creation contributions
 
                     # Assign a mock "event type" field for creation events
-                    'event_type': 'UpdatedCommentOnPREvent' if hit['_source.issue_pull_request'] else 'UpdatedCommentOnIssueEvent',  # githubql necessary field
-                    'created_at': hit['_source.created_at'],  # githubql necessary field - this is the one we'll use for identifying time
+                    'event_type': 'UpdatedCommentOnIssueEvent' if hit['_source.is_github_issue_comment'] else "RedundantIssue",  # githubql necessary field TODO are we missing any issues
+                    'created_at': hit['_source.comment_updated_at'],  # githubql necessary field - this is the one we'll use for identifying time
                 }
+                
                 item_datas.append(metrics_data)
                 if len(item_datas) >= MAX_BULK_UPDATE_SIZE: # TODO >= or else you lose an item right?
                     self.github_es_out.bulk_upload(item_datas, 'uuid') #TODO which field to use here?
