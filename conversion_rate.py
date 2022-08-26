@@ -313,9 +313,9 @@ class ConversionRateMetricsModel(MetricsModel):
         for hit in hits_github2:
             hit = json_normalize(hit).to_dict(orient='records')[0]
 
-            # TODO it appears that the value in this field is either 1.0 or nan, meaning the issues themselves are the "nan"
+            # TODO it appears that the value in this field is either 1.0 or nan, meaning the issues themselves are the "nan" (which we want to remove)
                 # For example https://github.com/chaoss/augur/issues/302	
-            if '_source.is_github_issue_comment' not in hit or hit['_source.is_github_issue_comment']: continue
+            if '_source.is_github_issue_comment' not in hit or not hit['_source.is_github_issue_comment']: continue
 
             if hit['_source.repository'] in self.github_repos: # Only process repos user has specified for analysis
                 # Combine SortingHat uuids but only if they have not been combined before to save time
@@ -324,7 +324,11 @@ class ConversionRateMetricsModel(MetricsModel):
                     combined_users.add(hit['_source.user_login'])
                     logging.info(f"Finished combine for this user - {hit['_source.user_login']}")
 
-                
+                try:
+                    user_uuid = str(api.search_unique_identities(db=db, term=hit['_source.user_login'])[0].uuid)
+                except sortinghat.exceptions.NotFoundError:
+                    user_uuid = None
+                    
                 metrics_data = {
                     # SHARED FIELDS  # TODO remove duplicates (issue again, but comments are new - scenario)
                     'sort': hit['sort'],
@@ -335,7 +339,7 @@ class ConversionRateMetricsModel(MetricsModel):
                     'repository': hit['_source.repository'], # Repository Name
                     'author_bot': hit['_source.author_bot'], # If author is a bot (also have user_data_bot and assignee_data_bot tbd)
                     'author_domain': hit['_source.author_domain'], # Authors domain
-                    'actor_id': str(api.search_unique_identities(db=db, term=hit['_source.user_login'])[0].uuid), # Fill in actor with author's info
+                    'actor_id': user_uuid, # Fill in actor with author's info
                     'actor_username': hit['_source.user_login'],  # githubql necessary field
                     'author_name': hit['_source.author_name'],
                     'author_org_name': hit['_source.author_org_name'],
