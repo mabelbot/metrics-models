@@ -458,7 +458,7 @@ class ConversionRateMetricsModel(MetricsModel):
                     user_uuid = hit['_source.user_login']
 
                 metrics_data = {
-                    # SHARED FIELDS  # TODO remove duplicates (issue again, but comments are new - scenario)
+                    # SHARED FIELDS
                     'sort': hit['sort'],
                     'metadata__updated_on': hit['_source.metadata__updated_on'],
                     'metadata__timestamp': hit['_source.metadata__timestamp'],
