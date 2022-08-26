@@ -115,6 +115,7 @@ class ConversionRateMetricsModel(MetricsModel):
 
         self.github2_issues_enriched_index = kwargs.get('github2_issues_enriched_index')
         self.github2_pull_enriched_index = kwargs.get('github2_pull_enriched_index')
+        self.combined_users = set()
         # self.issue_index = issue_index
         # self.repo_index = repo_index
         # self.git_index = git_index
@@ -233,7 +234,6 @@ class ConversionRateMetricsModel(MetricsModel):
                       query={"query": {"match_all": {}}}
                       )
         hits = []
-        combined_users = set()
 
         for hit in search:
             hits.append(hit)
@@ -243,9 +243,9 @@ class ConversionRateMetricsModel(MetricsModel):
 
             if hit['_source.repository'] in self.github_repos: # Only process repos user has specified for analysis
                 # Combine SortingHat uuids for Github w/ Githubql ones
-                if hit['_source.user_login'] not in combined_users:
+                if hit['_source.user_login'] not in self.combined_users:
                     # identities.combine_identities(hit['_source.user_login'], ['github', 'githubql', 'github2']) #info: This is only relevant if an identity is present in both GH and GHQL
-                    # combined_users.add(hit['_source.user_login'])
+                    # self.combined_users.add(hit['_source.user_login'])
                     logging.info(f"Finished combine for this user - {hit['_source.user_login']}")
                 # logging.info(f"Result of combining {api.search_unique_identities(db=db, term=hit['_source.user_login'])}")
                 metrics_data = {
@@ -306,7 +306,7 @@ class ConversionRateMetricsModel(MetricsModel):
                       query={"query": {"match_all": {}}}
                       )
         hits_github2 = []
-        # combined_users = set() # Reuse set from before
+        # self.combined_users = set() # Reuse set from before
 
         for hit in search_github2:
             hits_github2.append(hit)
@@ -320,9 +320,9 @@ class ConversionRateMetricsModel(MetricsModel):
 
             if hit['_source.repository'] in self.github_repos: # Only process repos user has specified for analysis
                 # Combine SortingHat uuids but only if they have not been combined before to save time
-                if hit['_source.user_login'] not in combined_users:
+                if hit['_source.user_login'] not in self.combined_users:
                     identities.combine_identities(hit['_source.user_login'], ['github', 'githubql', 'github2']) #info: This is only relevant if an identity is present in both GH and GHQL
-                    combined_users.add(hit['_source.user_login'])
+                    self.combined_users.add(hit['_source.user_login'])
                     logging.info(f"Finished combine for this user - {hit['_source.user_login']}")
 
                 try:
@@ -393,6 +393,89 @@ class ConversionRateMetricsModel(MetricsModel):
 
         self.github_es_out.bulk_upload(item_datas, 'uuid')
         item_datas = []
+
+    def metrics_models_combine_github2_prs(self):
+        """ 
+        Purpose: Append data from github2 for comments on pull requests to output (combined) index 
+        
+        :param self: self
+        :returns: None (in place modification only)
+        """
+        item_datas = []
+        logging.info('Begin method: metrics_models_combine_github2_prs')
+
+        search = scan(self.es_in,
+                      index=self.github2_pull_enriched_index,
+                      query={"query": {"match_all": {}}}
+                      )
+        hits = []
+        self.combined_users = set()
+
+        for hit in search:
+            hits.append(hit)
+        
+        for hit in hits:
+            hit = json_normalize(hit).to_dict(orient='records')[0]
+
+            if hit['_source.repository'] in self.github_repos: # Only process repos user has specified for analysis
+                # Combine SortingHat uuids for Github w/ Githubql ones
+                if hit['_source.user_login'] not in self.combined_users:
+                    # identities.combine_identities(hit['_source.user_login'], ['github', 'githubql', 'github2']) #info: This is only relevant if an identity is present in both GH and GHQL
+                    # self.combined_users.add(hit['_source.user_login'])
+                    logging.info(f"Finished combine for this user - {hit['_source.user_login']}")
+                # logging.info(f"Result of combining {api.search_unique_identities(db=db, term=hit['_source.user_login'])}")
+                metrics_data = {
+                    # SHARED FIELDS 
+                    # '_index': hit['_index'],
+                    # '_type': hit['_type'],
+                    # '_id': hit['_id'],
+                    # '_score': hit['_score'],
+                    'sort': hit['sort'],
+                    'metadata__updated_on': hit['_source.metadata__updated_on'],
+                    'metadata__timestamp': hit['_source.metadata__timestamp'],
+                    'offset': hit['_source.offset'],
+                    'origin': hit['_source.origin'],
+                    'tag': hit['_source.tag'],
+                    'uuid': hit['_source.uuid'],
+                    'repository': hit['_source.repository'],
+                    'author_bot': hit['_source.author_bot'],
+                    'author_domain': hit['_source.author_domain'],
+                    # '_source.author_gender': 
+                    # '_source.author_gender_acc': #TODO see if missing fields can be handled
+                    'actor_id': str(api.search_unique_identities(db=db, term=hit['_source.user_login'])[0].uuid), # TODO : used to be github username
+                    'actor_username': hit['_source.user_login'],  # githubql necessary field
+                    'author_multi_org_names': hit['_source.author_multi_org_names'],
+                    'author_name': hit['_source.author_name'],
+                    'author_org_name': hit['_source.author_org_name'],
+                    'author_user_name': hit['_source.author_user_name'],
+                    'author_uuid': hit['_source.author_uuid'],
+                    'github_repo': hit['_source.github_repo'],
+                    'grimoire_creation_date': hit['_source.grimoire_creation_date'],
+                    'issue_url': hit['_source.issue_url'],
+                    'item_type': hit['_source.item_type'],
+                    'metadata__enriched_on': hit['_source.metadata__enriched_on'],
+                    'metadata__filter_raw': hit['_source.metadata__filter_raw'],
+                    'metadata__gelk_backend_name': hit['_source.metadata__gelk_backend_name'],
+                    'metadata__gelk_version': hit['_source.metadata__gelk_version'],
+                    'project': hit['_source.project'],
+                    'project_1': hit['_source.project_1'],
+                    'pull_request': hit['_source.pull_request'],
+                    'title': hit['_source.title'],
+                    'title_analyzed': hit['_source.title_analyzed'],
+                    # TODO deal with assignee 2 way data and other stuff. first we deal with creation contributions
+
+                    # Assign a mock "event type" field for creation events
+                    'event_type': 'CreatedPREvent' if hit['_source.pull_request'] else 'CreatedEvent',  # githubql necessary field
+                    'created_at': hit['_source.created_at'],  # githubql necessary field - this is the one we'll use for identifying time
+                }
+                item_datas.append(metrics_data)
+                if len(item_datas) >= MAX_BULK_UPDATE_SIZE: # TODO >= or else you lose an item right?
+                    self.github_es_out.bulk_upload(item_datas, 'uuid') #TODO which field to use here?
+                    item_datas = []
+
+            self.github_es_out.bulk_upload(item_datas, 'uuid') 
+            item_datas = []
+
 
     def metrics_model_metrics(self):
         """
