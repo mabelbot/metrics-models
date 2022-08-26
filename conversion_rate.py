@@ -245,10 +245,10 @@ class ConversionRateMetricsModel(MetricsModel):
             if hit['_source.repository'] in self.github_repos:  # Only process repos user has specified for analysis
                 # Combine SortingHat uuids for Github w/ Githubql ones
                 if hit['_source.user_login'] not in self.combined_users:
-                    # identities.combine_identities(hit['_source.user_login'], ['github', 'githubql', 'github2']) #info: This is only relevant if an identity is present in both GH and GHQL
-                    # self.combined_users.add(hit['_source.user_login'])
+                    identities.combine_identities(hit['_source.user_login'], ['github', 'githubql', 'github2']) #info: This is only relevant if an identity is present in both GH and GHQL
+                    self.combined_users.add(hit['_source.user_login'])
                     logging.info(f"Finished combine for this user - {hit['_source.user_login']}")
-                # logging.info(f"Result of combining {api.search_unique_identities(db=db, term=hit['_source.user_login'])}")
+                
                 metrics_data = {
                     # SHARED FIELDS 
                     # '_index': hit['_index'],
@@ -478,7 +478,7 @@ class ConversionRateMetricsModel(MetricsModel):
                     'github_repo': hit['_source.github_repo'],
                     'grimoire_creation_date': hit['_source.grimoire_creation_date'], # Main Date field	Pull request/comment creation date.
                     'issue_url': hit['_source.url'],  # Full url to the PR's comment anchor
-                    'item_type': hit['_source.item_type'],  # The type of the item, in this case it's a PR comment.
+                    'item_type': hit['_source.sub_type'], # Type of item (PR (review) comment)
                     'metadata__enriched_on': hit['_source.metadata__enriched_on'],
                     'metadata__filter_raw': hit['_source.metadata__filter_raw'],
                     'metadata__gelk_backend_name': hit['_source.metadata__gelk_backend_name'],
@@ -562,4 +562,4 @@ if __name__ == '__main__':
     conversion_rate_model.metrics_model_metrics()
     logging.info("Exit main method")
 
-# Test
+# Vscode update
