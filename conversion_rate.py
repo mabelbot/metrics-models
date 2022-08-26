@@ -113,7 +113,8 @@ class ConversionRateMetricsModel(MetricsModel):
         self.github_repos = metric_model.get_all_repo(kwargs.get('json_file'), 'github') \
                     + metric_model.get_all_repo(kwargs.get('json_file'), 'githubql') #Used for filtering repos by what user specifies
 
-        self.github2_enriched_index = kwargs.get('github2_enriched_index')
+        self.github2_issues_enriched_index = kwargs.get('github2_issues_enriched_index')
+        self.github2_pull_enriched_index = kwargs.get('github2_pull_enriched_index')
         # self.issue_index = issue_index
         # self.repo_index = repo_index
         # self.git_index = git_index
@@ -301,7 +302,7 @@ class ConversionRateMetricsModel(MetricsModel):
 
         # Append Github2 data ----------------------------------------------------------------------------------------
         search_github2 = scan(self.es_in,
-                      index=self.github2_enriched_index,
+                      index=self.github2_issues_enriched_index,
                       query={"query": {"match_all": {}}}
                       )
         hits_github2 = []
@@ -327,7 +328,8 @@ class ConversionRateMetricsModel(MetricsModel):
                 try:
                     user_uuid = str(api.search_unique_identities(db=db, term=hit['_source.user_login'])[0].uuid)
                 except sortinghat.exceptions.NotFoundError:
-                    user_uuid = None
+                    print(f"Processing person {hit['_source.user_login']}")
+                    user_uuid = hit['_source.user_login']
                     
                 metrics_data = {
                     # SHARED FIELDS  # TODO remove duplicates (issue again, but comments are new - scenario)
@@ -340,7 +342,7 @@ class ConversionRateMetricsModel(MetricsModel):
                     'author_bot': hit['_source.author_bot'], # If author is a bot (also have user_data_bot and assignee_data_bot tbd)
                     'author_domain': hit['_source.author_domain'], # Authors domain
                     'actor_id': user_uuid, # Fill in actor with author's info
-                    'actor_username': hit['_source.user_login'],  # githubql necessary field
+                    'actor_username': hit['_source.user_login'],  # githubql necessary field # user_data_user_name
                     'author_name': hit['_source.author_name'],
                     'author_org_name': hit['_source.author_org_name'],
                     'author_user_name': hit['_source.author_user_name'],
