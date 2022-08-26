@@ -33,9 +33,8 @@ from elasticsearch import Elasticsearch, RequestsHttpConnection
 from elasticsearch.helpers import scan
 import logging
 
-
 from perceval.backend import uuid
-from grimoire_elk.elastic_mapping import Mapping as BaseMapping #TODO is this import right?
+from grimoire_elk.elastic_mapping import Mapping as BaseMapping  # TODO is this import right?
 from grimoire_elk.enriched.utils import get_time_diff_days
 from grimoirelab_toolkit.datetime import (datetime_utcnow,
                                           str_to_datetime,
@@ -49,14 +48,15 @@ from sortinghat.matcher import create_identity_matcher
 from metric_model import MetricsModel
 import metric_model  # myc to import utils at the top - todo will move utils into their own module later
 import identities
+
 # import aggregate
 
-db = Database('root', '', 'test_sh') #TODO
+db = Database('root', '', 'test_sh')  # TODO
 
+MAX_BULK_UPDATE_SIZE = 100  # TODO why does this not match the bulk size in elastic.py?
 
-MAX_BULK_UPDATE_SIZE = 100 # TODO why does this not match the bulk size in elastic.py?
-
-logging.basicConfig(filename='conversion_rate.log', filemode='w', format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(filename='conversion_rate.log', filemode='w',
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logging.info('Begin conversion_rate.py')
 
 """
@@ -98,10 +98,10 @@ class ConversionRateMetricsModel(MetricsModel):
             :param str githubql_index: name of the index that contains the grimoirelab-elk githubql.py enriched data (mixed issues/prs)
 
          """
-        super().__init__(kwargs.get('json_file'), 
-                            kwargs.get('github_out_index'), 
-                            kwargs.get('community'), 
-                            kwargs.get('level')) #TODO change back to out index
+        super().__init__(kwargs.get('json_file'),
+                         kwargs.get('github_out_index'),
+                         kwargs.get('community'),
+                         kwargs.get('level'))  # TODO change back to out index
         self.tracking_period_length = kwargs.get('tracking_period_length')
         self.from_date = kwargs.get('from_date')
         self.lag_time_length = kwargs.get('lag_time_length')
@@ -109,9 +109,10 @@ class ConversionRateMetricsModel(MetricsModel):
         self.github_index = kwargs.get('github_index')
         self.githubql_index = kwargs.get('githubql_index')
         self.github_out_index = kwargs.get('github_out_index')
-        
+
         self.github_repos = metric_model.get_all_repo(kwargs.get('json_file'), 'github') \
-                    + metric_model.get_all_repo(kwargs.get('json_file'), 'githubql') #Used for filtering repos by what user specifies
+                            + metric_model.get_all_repo(kwargs.get('json_file'),
+                                                        'githubql')  # Used for filtering repos by what user specifies
 
         self.github2_issues_enriched_index = kwargs.get('github2_issues_enriched_index')
         self.github2_pull_enriched_index = kwargs.get('github2_pull_enriched_index')
@@ -224,7 +225,7 @@ class ConversionRateMetricsModel(MetricsModel):
 
         Use Actor ID to track events.
         """
-        
+
         item_datas = []
         logging.info('Begin at combine indexes')
 
@@ -237,11 +238,11 @@ class ConversionRateMetricsModel(MetricsModel):
 
         for hit in search:
             hits.append(hit)
-        
+
         for hit in hits:
             hit = json_normalize(hit).to_dict(orient='records')[0]
 
-            if hit['_source.repository'] in self.github_repos: # Only process repos user has specified for analysis
+            if hit['_source.repository'] in self.github_repos:  # Only process repos user has specified for analysis
                 # Combine SortingHat uuids for Github w/ Githubql ones
                 if hit['_source.user_login'] not in self.combined_users:
                     # identities.combine_identities(hit['_source.user_login'], ['github', 'githubql', 'github2']) #info: This is only relevant if an identity is present in both GH and GHQL
@@ -266,7 +267,8 @@ class ConversionRateMetricsModel(MetricsModel):
                     'author_domain': hit['_source.author_domain'],
                     # '_source.author_gender': 
                     # '_source.author_gender_acc': #TODO see if missing fields can be handled
-                    'actor_id': str(api.search_unique_identities(db=db, term=hit['_source.user_login'])[0].uuid), # TODO : used to be github username
+                    'actor_id': str(api.search_unique_identities(db=db, term=hit['_source.user_login'])[0].uuid),
+                    # TODO : used to be github username
                     'actor_username': hit['_source.user_login'],  # githubql necessary field
                     'author_multi_org_names': hit['_source.author_multi_org_names'],
                     'author_name': hit['_source.author_name'],
@@ -289,22 +291,24 @@ class ConversionRateMetricsModel(MetricsModel):
                     # TODO deal with assignee 2 way data and other stuff. first we deal with creation contributions
 
                     # Assign a mock "event type" field for creation events
-                    'event_type': 'CreatedPREvent' if hit['_source.pull_request'] else 'CreatedEvent',  # githubql necessary field
-                    'created_at': hit['_source.created_at'],  # githubql necessary field - this is the one we'll use for identifying time
+                    'event_type': 'CreatedPREvent' if hit['_source.pull_request'] else 'CreatedEvent',
+                    # githubql necessary field
+                    'created_at': hit['_source.created_at'],
+                    # githubql necessary field - this is the one we'll use for identifying time
                 }
                 item_datas.append(metrics_data)
-                if len(item_datas) >= MAX_BULK_UPDATE_SIZE: # TODO >= or else you lose an item right?
-                    self.github_es_out.bulk_upload(item_datas, 'uuid') #TODO which field to use here?
+                if len(item_datas) >= MAX_BULK_UPDATE_SIZE:  # TODO >= or else you lose an item right?
+                    self.github_es_out.bulk_upload(item_datas, 'uuid')  # TODO which field to use here?
                     item_datas = []
 
-        self.github_es_out.bulk_upload(item_datas, 'uuid') 
+        self.github_es_out.bulk_upload(item_datas, 'uuid')
         item_datas = []
 
         # Append Github2 data ----------------------------------------------------------------------------------------
         search_github2 = scan(self.es_in,
-                      index=self.github2_issues_enriched_index,
-                      query={"query": {"match_all": {}}}
-                      )
+                              index=self.github2_issues_enriched_index,
+                              query={"query": {"match_all": {}}}
+                              )
         hits_github2 = []
 
         for hit in search_github2:
@@ -314,13 +318,14 @@ class ConversionRateMetricsModel(MetricsModel):
             hit = json_normalize(hit).to_dict(orient='records')[0]
 
             # TODO it appears that the value in this field is either 1.0 or nan, meaning the issues themselves are the "nan" (which we want to remove)
-                # For example https://github.com/chaoss/augur/issues/302	
+            # For example https://github.com/chaoss/augur/issues/302
             if '_source.is_github_issue_comment' not in hit or not hit['_source.is_github_issue_comment']: continue
 
-            if hit['_source.repository'] in self.github_repos: # Only process repos user has specified for analysis
+            if hit['_source.repository'] in self.github_repos:  # Only process repos user has specified for analysis
                 # Combine SortingHat uuids but only if they have not been combined before to save time
                 if hit['_source.user_login'] not in self.combined_users:
-                    identities.combine_identities(hit['_source.user_login'], ['github', 'githubql', 'github2']) #info: This is only relevant if an identity is present in both GH and GHQL
+                    identities.combine_identities(hit['_source.user_login'], ['github', 'githubql',
+                                                                              'github2'])  # info: This is only relevant if an identity is present in both GH and GHQL
                     self.combined_users.add(hit['_source.user_login'])
                     logging.info(f"Finished combine for this user - {hit['_source.user_login']}")
 
@@ -329,65 +334,70 @@ class ConversionRateMetricsModel(MetricsModel):
                 except sortinghat.exceptions.NotFoundError:
                     print(f"Processing person {hit['_source.user_login']}")
                     user_uuid = hit['_source.user_login']
-                    
+
                 metrics_data = {
                     # SHARED FIELDS  # TODO remove duplicates (issue again, but comments are new - scenario)
                     'sort': hit['sort'],
                     'metadata__updated_on': hit['_source.metadata__updated_on'],
                     'metadata__timestamp': hit['_source.metadata__timestamp'],
-                    'tag': hit['_source.tag'], # Perceval tag
-                    'uuid': hit['_source.uuid'], # Perceval UUID
-                    'repository': hit['_source.repository'], # Repository Name
-                    'author_bot': hit['_source.author_bot'], # If author is a bot (also have user_data_bot and assignee_data_bot tbd)
-                    'author_domain': hit['_source.author_domain'], # Authors domain
-                    'actor_id': user_uuid, # Fill in actor with author's info
+                    'tag': hit['_source.tag'],  # Perceval tag
+                    'uuid': hit['_source.uuid'],  # Perceval UUID
+                    'repository': hit['_source.repository'],  # Repository Name
+                    'author_bot': hit['_source.author_bot'],
+                    # If author is a bot (also have user_data_bot and assignee_data_bot tbd)
+                    'author_domain': hit['_source.author_domain'],  # Authors domain
+                    'actor_id': user_uuid,  # Fill in actor with author's info
                     'actor_username': hit['_source.user_login'],  # githubql necessary field # user_data_user_name
                     'author_name': hit['_source.author_name'],
                     'author_org_name': hit['_source.author_org_name'],
                     'author_user_name': hit['_source.author_user_name'],
-                    'author_uuid': hit['_source.author_uuid'], # This is the old UUID from Sorting Hat that may not be combined
+                    'author_uuid': hit['_source.author_uuid'],
+                    # This is the old UUID from Sorting Hat that may not be combined
                     'github_repo': hit['_source.github_repo'],
                     'grimoire_creation_date': hit['_source.grimoire_creation_date'],
-                    'issue_url': hit['_source.issue_url'], # Full url of issue
-                    'item_type': hit['_source.item_type'], # The type of the item, in this case it's (issue/comment).
+                    'issue_url': hit['_source.issue_url'],  # Full url of issue
+                    'item_type': hit['_source.item_type'],  # The type of the item, in this case it's (issue/comment).
                     'metadata__enriched_on': hit['_source.metadata__enriched_on'],
                     'metadata__filter_raw': hit['_source.metadata__filter_raw'],
                     'metadata__gelk_backend_name': hit['_source.metadata__gelk_backend_name'],
                     'metadata__gelk_version': hit['_source.metadata__gelk_version'],
-                    'project': hit['_source.project'], # Project name 
-                    'project_1': hit['_source.project_1'], # Used if more than one project levels are allowed in the project hierarchy.
-                    'pull_request': hit['_source.issue_pull_request'], # Boolean for if this is a PR or not
+                    'project': hit['_source.project'],  # Project name
+                    'project_1': hit['_source.project_1'],
+                    # Used if more than one project levels are allowed in the project hierarchy.
+                    'pull_request': hit['_source.issue_pull_request'],  # Boolean for if this is a PR or not
                     'title': hit['_source.issue_title'],
                     # 'title_analyzed': hit['_source.issue_title_analyzed'], # This column doesn't exist
                     # TODO deal with assignee 2 way data and other stuff. first we deal with creation contributions
 
                     # Assign a mock "event type" field for creation events
-                    'event_type': 'UpdatedCommentOnIssueEvent' if hit['_source.is_github_issue_comment'] else "RedundantIssue",  # githubql necessary field TODO are we missing any issues
-                    'created_at': hit['_source.comment_updated_at'],  # githubql necessary field - this is the one we'll use for identifying time
+                    'event_type': 'UpdatedCommentOnIssueEvent' if hit[
+                        '_source.is_github_issue_comment'] else "RedundantIssue",
+                    # githubql necessary field TODO are we missing any issues
+                    'created_at': hit['_source.comment_updated_at'],
+                    # githubql necessary field - this is the one we'll use for identifying time
                 }
-                
+
                 item_datas.append(metrics_data)
-                if len(item_datas) >= MAX_BULK_UPDATE_SIZE: # TODO >= or else you lose an item right?
-                    self.github_es_out.bulk_upload(item_datas, 'uuid') #TODO which field to use here?
+                if len(item_datas) >= MAX_BULK_UPDATE_SIZE:  # TODO >= or else you lose an item right?
+                    self.github_es_out.bulk_upload(item_datas, 'uuid')  # TODO which field to use here?
                     item_datas = []
 
-        self.github_es_out.bulk_upload(item_datas, 'uuid') 
+        self.github_es_out.bulk_upload(item_datas, 'uuid')
         item_datas = []
 
-        
         # Append Githubql data as-is ----------------------------------------------------------------------------------
         search = scan(self.es_in,
-                index=self.githubql_index,
-                query={"query": {"match_all": {}}}
-                )
-        
+                      index=self.githubql_index,
+                      query={"query": {"match_all": {}}}
+                      )
+
         for hit in search:
             del hit["_id"]
             del hit['_type']
             del hit['_index']
             item_datas.append(dict(hit)["_source"])
-            if len(item_datas) >= MAX_BULK_UPDATE_SIZE: 
-                self.github_es_out.bulk_upload(item_datas, 'uuid') # TODO see above
+            if len(item_datas) >= MAX_BULK_UPDATE_SIZE:
+                self.github_es_out.bulk_upload(item_datas, 'uuid')  # TODO see above
                 item_datas = []
 
         self.github_es_out.bulk_upload(item_datas, 'uuid')
@@ -414,79 +424,79 @@ class ConversionRateMetricsModel(MetricsModel):
         logging.info('Begin method: metrics_models_combine_github2_prs')
 
         search_github2 = scan(self.es_in,
-                      index=self.github2_pull_enriched_index,
-                      query= {"query":{"match": {"item_type": "comment"}}}
-                      )
+                              index=self.github2_pull_enriched_index,
+                              query={"query": {"match": {"item_type": "comment"}}}
+                              # TODO: review_comment is the only type right
+                              )
         hits_github2 = []
 
         for hit in search_github2:
+            # print(hit['_source']['sub_type'])
             hits_github2.append(hit)
-            print(hit['_source']['item_type'])
 
         for hit in hits_github2:
             hit = json_normalize(hit).to_dict(orient='records')[0]
 
-            # The following fields WILL vary depending on the schema of each backend 
+            # The following fields WILL vary depending on the schema of each backend
+            # There should be only comments here
 
-            # TODO it appears that the value in this field is either 1.0 or nan, meaning the issues themselves are the "nan" (which we want to remove)
-                # For example https://github.com/chaoss/augur/issues/302	
-            if '_source.is_github_issue_comment' not in hit or not hit['_source.is_github_issue_comment']: continue
-
-            if hit['_source.repository'] in self.github_repos: # Only process repos user has specified for analysis
+            if hit['_source.repository'] in self.github_repos:  # Only process repos user has specified for analysis
                 # Combine SortingHat uuids but only if they have not been combined before to save time
                 if hit['_source.user_login'] not in self.combined_users:
-                    identities.combine_identities(hit['_source.user_login'], ['github', 'githubql', 'github2']) #info: This is only relevant if an identity is present in both GH and GHQL
+                    identities.combine_identities(hit['_source.user_login'], ['github', 'githubql',
+                                                                              'github2'])  # info: This is only relevant if an identity is present in both GH and GHQL
                     self.combined_users.add(hit['_source.user_login'])
                     logging.info(f"Finished combine for this user - {hit['_source.user_login']}")
+
+                # Make sure there is a pull request associated with this comment
+                assert hit['_source.pull_id'] and hit['_source.is_github_review_comment'] == 1
 
                 try:
                     user_uuid = str(api.search_unique_identities(db=db, term=hit['_source.user_login'])[0].uuid)
                 except sortinghat.exceptions.NotFoundError:
                     print(f"Processing person {hit['_source.user_login']}")
                     user_uuid = hit['_source.user_login']
-                    
+
                 metrics_data = {
                     # SHARED FIELDS  # TODO remove duplicates (issue again, but comments are new - scenario)
                     'sort': hit['sort'],
                     'metadata__updated_on': hit['_source.metadata__updated_on'],
                     'metadata__timestamp': hit['_source.metadata__timestamp'],
-                    'tag': hit['_source.tag'], # Perceval tag
-                    'uuid': hit['_source.uuid'], # Perceval UUID
-                    'repository': hit['_source.repository'], # Repository Name
-                    'author_bot': hit['_source.author_bot'], # If author is a bot (also have user_data_bot and assignee_data_bot tbd)
-                    'author_domain': hit['_source.author_domain'], # Authors domain
-                    'actor_id': user_uuid, # Fill in actor with author's info
+                    'origin': hit['_source.origin'],
+                    'tag': hit['_source.tag'],  # Perceval tag
+                    'uuid': hit['_source.uuid'],  # Perceval UUID
+                    'repository': hit['_source.repository'],  # Repository Name
+                    'author_bot': hit['_source.author_bot'],
+                    # If author is a bot (also have user_data_bot and assignee_data_bot tbd)
+                    'author_domain': hit['_source.author_domain'],  # Authors domain
+                    'actor_id': user_uuid,  # Fill in actor with author's info
                     'actor_username': hit['_source.user_login'],  # githubql necessary field # user_data_user_name
                     'author_name': hit['_source.author_name'],
                     'author_org_name': hit['_source.author_org_name'],
                     'author_user_name': hit['_source.author_user_name'],
                     'author_uuid': hit['_source.author_uuid'], # This is the old UUID from Sorting Hat that may not be combined
                     'github_repo': hit['_source.github_repo'],
-                    'grimoire_creation_date': hit['_source.grimoire_creation_date'],
-                    'issue_url': hit['_source.issue_url'], # Full url of issue
-                    'item_type': hit['_source.item_type'], # The type of the item, in this case it's (issue/comment).
+                    'grimoire_creation_date': hit['_source.grimoire_creation_date'], # Main Date field	Pull request/comment creation date.
+                    'issue_url': hit['_source.url'],  # Full url to the PR's comment anchor
+                    'item_type': hit['_source.item_type'],  # The type of the item, in this case it's a PR comment.
                     'metadata__enriched_on': hit['_source.metadata__enriched_on'],
                     'metadata__filter_raw': hit['_source.metadata__filter_raw'],
                     'metadata__gelk_backend_name': hit['_source.metadata__gelk_backend_name'],
                     'metadata__gelk_version': hit['_source.metadata__gelk_version'],
-                    'project': hit['_source.project'], # Project name 
+                    'project': hit['_source.project'],  # Project name
                     'project_1': hit['_source.project_1'], # Used if more than one project levels are allowed in the project hierarchy.
-                    'pull_request': hit['_source.issue_pull_request'], # Boolean for if this is a PR or not
+                    'pull_request': False,  # Boolean for if this is a PR or not
                     'title': hit['_source.issue_title'],
-                    # 'title_analyzed': hit['_source.issue_title_analyzed'], # This column doesn't exist
-                    # TODO deal with assignee 2 way data and other stuff. first we deal with creation contributions
-
-                    # Assign a mock "event type" field for creation events
-                    'event_type': 'UpdatedCommentOnIssueEvent' if hit['_source.is_github_issue_comment'] else "RedundantIssue",  # githubql necessary field TODO are we missing any issues
-                    'created_at': hit['_source.comment_updated_at'],  # githubql necessary field - this is the one we'll use for identifying time
+                    'event_type': 'UpdatedCommentOnPREvent' if hit['_source.sub_type'] == 'review_comment' else "OtherPRComment",  # githubql necessary field
+                    'created_at': hit['_source.comment_updated_at']
                 }
-                
+
                 item_datas.append(metrics_data)
-                if len(item_datas) >= MAX_BULK_UPDATE_SIZE: # TODO >= or else you lose an item right?
-                    self.github_es_out.bulk_upload(item_datas, 'uuid') #TODO which field to use here?
+                if len(item_datas) >= MAX_BULK_UPDATE_SIZE:
+                    self.github_es_out.bulk_upload(item_datas, 'uuid')  # TODO correct field to use
                     item_datas = []
 
-        self.github_es_out.bulk_upload(item_datas, 'uuid') 
+        self.github_es_out.bulk_upload(item_datas, 'uuid')
         item_datas = []
 
     def metrics_model_metrics(self):
@@ -495,23 +505,23 @@ class ConversionRateMetricsModel(MetricsModel):
         overrides superclass method metrics_model_metrics
         """
         self.es_in = Elasticsearch(elastic_url, use_ssl=False, verify_certs=False,
-                                   connection_class=RequestsHttpConnection) # TODO does use_ssl have to be True?
+                                   connection_class=RequestsHttpConnection)  # TODO does use_ssl have to be True?
         self.github_es_out = ElasticSearch(elastic_url, index=self.github_out_index, mappings=Mapping(), clean=True)
 
         # Depending on type of community , choose one or more of these levels
-        if self.level == "community": # communities would take care of whole repo and SIG under organization
+        if self.level == "community":  # communities would take care of whole repo and SIG under organization
             all_repos_list = self.all_repo
             label = "community"
             self.metrics_model_enrich(all_repos_list, self.community)
-        if self.level == "project": # keywords project and community can be the same in some cases, but not when there are multiple levels (see Kubernetes) (an example is a SIG)
-            all_repo_json = json.load(open(self.json_file)) # This file is similar to projects.json
+        if self.level == "project":  # keywords project and community can be the same in some cases, but not when there are multiple levels (see Kubernetes) (an example is a SIG)
+            all_repo_json = json.load(open(self.json_file))  # This file is similar to projects.json
             for project in all_repo_json:
                 repos_list = []
                 for j in all_repo_json[project][self.issue_index.split('_')[0]]:
                     repos_list.append(j)
                 self.metrics_model_enrich(repos_list, project)
         if self.level == "repo":
-            label="repo" # TODO when to use this?
+            label = "repo"  # TODO when to use this?
             # self.metrics_model_combine_indexes_github()  # TODO fill in correct arguments
             self.metrics_models_combine_github2_prs()
             # d2, d1 = aggregate.get_contributors()  # Returns numerator, denominator (convert to, convert from)
@@ -541,7 +551,6 @@ class Mapping(BaseMapping):
         return {"items": mapping}
 
 
-
 if __name__ == '__main__':
     CONF = yaml.safe_load(open('conf.yaml'))
     elastic_url = CONF['url']
@@ -552,3 +561,5 @@ if __name__ == '__main__':
     conversion_rate_model = ConversionRateMetricsModel(**combined_kwargs)
     conversion_rate_model.metrics_model_metrics()
     logging.info("Exit main method")
+
+# Test
