@@ -342,7 +342,7 @@ class ConversionRateMetricsModel(MetricsModel):
                     'metadata__updated_on': hit['_source.metadata__updated_on'],
                     'metadata__timestamp': hit['_source.metadata__timestamp'],
                     'tag': hit['_source.tag'],  # Perceval tag
-                    'uuid': hit['_source.uuid'],  # Perceval UUID
+                    'uuid': hit['_source.uuid'] + str(hashlib.md5(hit['_source.url'].encode()).hexdigest()),  # Perceval UUID
                     'repository': hit['_source.repository'],  # Repository Name
                     'author_bot': hit['_source.author_bot'],
                     # If author is a bot (also have user_data_bot and assignee_data_bot tbd)
@@ -375,7 +375,7 @@ class ConversionRateMetricsModel(MetricsModel):
                         '_source.is_github_issue_comment'] else "RedundantIssue",
                     # githubql necessary field TODO are we missing any issues
                     'created_at': hit['_source.comment_updated_at'],
-                    # githubql necessary field - this is the one we'll use for identifying time
+                    'comment_body': hit['_source.body']
                 }
 
                 item_datas.append(metrics_data)
@@ -531,7 +531,7 @@ class ConversionRateMetricsModel(MetricsModel):
                 self.metrics_model_enrich(repos_list, project)
         if self.level == "repo":
             label = "repo"  # TODO when to use this?
-            # self.metrics_model_combine_indexes_github()
+            self.metrics_model_combine_indexes_github()
             self.metrics_models_combine_github2_prs()
             # d2, d1 = aggregate.get_contributors()  # Returns numerator, denominator (convert to, convert from)
             # aggregate.calculate_cr_series(d2, d1)  # Bulk update back to specified final index
