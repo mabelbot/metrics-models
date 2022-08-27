@@ -29,6 +29,7 @@ import pandas as pd
 from pandas import json_normalize
 import ssl, certifi
 import requests
+import hashlib
 from elasticsearch import Elasticsearch, RequestsHttpConnection
 from elasticsearch.helpers import scan
 import logging
@@ -422,6 +423,7 @@ class ConversionRateMetricsModel(MetricsModel):
         """
         item_datas = []
         logging.info('Begin method: metrics_models_combine_github2_prs')
+        # test_set = set()
 
         search_github2 = scan(self.es_in,
                               index=self.github2_pull_enriched_index,
@@ -433,6 +435,8 @@ class ConversionRateMetricsModel(MetricsModel):
         for hit in search_github2:
             # print(hit['_source']['sub_type'])
             hits_github2.append(hit)
+
+        logging.info(f'Method metrics_models_combine_github2_prs number of hits {len(hits_github2)}')
 
         for hit in hits_github2:
             hit = json_normalize(hit).to_dict(orient='records')[0]
@@ -454,8 +458,10 @@ class ConversionRateMetricsModel(MetricsModel):
                 try:
                     user_uuid = str(api.search_unique_identities(db=db, term=hit['_source.user_login'])[0].uuid)
                 except sortinghat.exceptions.NotFoundError:
-                    print(f"Processing person {hit['_source.user_login']}")
+                    print(f"Processing person from github2 PR Comments {hit['_source.user_login']}")
                     user_uuid = hit['_source.user_login']
+
+                # test_set.add(hit['_source.url'])
 
                 metrics_data = {
                     # SHARED FIELDS
@@ -464,7 +470,7 @@ class ConversionRateMetricsModel(MetricsModel):
                     'metadata__timestamp': hit['_source.metadata__timestamp'],
                     'origin': hit['_source.origin'],
                     'tag': hit['_source.tag'],  # Perceval tag
-                    'uuid': hit['_source.uuid'],  # Perceval UUID
+                    'uuid': hit['_source.uuid'] + str(hashlib.md5(hit['_source.url'].encode()).hexdigest()),  # Perceval UUID + md5 hash
                     'repository': hit['_source.repository'],  # Repository Name
                     'author_bot': hit['_source.author_bot'],
                     # If author is a bot (also have user_data_bot and assignee_data_bot tbd)
@@ -488,16 +494,19 @@ class ConversionRateMetricsModel(MetricsModel):
                     'pull_request': False,  # Boolean for if this is a PR or not
                     'title': hit['_source.issue_title'],
                     'event_type': 'UpdatedCommentOnPREvent' if hit['_source.sub_type'] == 'review_comment' else "OtherPRComment",  # githubql necessary field
-                    'created_at': hit['_source.comment_updated_at']
+                    'created_at': hit['_source.comment_updated_at'],
+                    'comment_body': hit['_source.body']
                 }
 
                 item_datas.append(metrics_data)
                 if len(item_datas) >= MAX_BULK_UPDATE_SIZE:
+                    logging.info(f'Bulk Uploading {len(item_datas)} items')
                     self.github_es_out.bulk_upload(item_datas, 'uuid')  # TODO correct field to use
                     item_datas = []
 
         self.github_es_out.bulk_upload(item_datas, 'uuid')
         item_datas = []
+        # print(len(test_set))
 
     def metrics_model_metrics(self):
         """
@@ -522,7 +531,7 @@ class ConversionRateMetricsModel(MetricsModel):
                 self.metrics_model_enrich(repos_list, project)
         if self.level == "repo":
             label = "repo"  # TODO when to use this?
-            # self.metrics_model_combine_indexes_github()  # TODO fill in correct arguments
+            # self.metrics_model_combine_indexes_github()
             self.metrics_models_combine_github2_prs()
             # d2, d1 = aggregate.get_contributors()  # Returns numerator, denominator (convert to, convert from)
             # aggregate.calculate_cr_series(d2, d1)  # Bulk update back to specified final index
