@@ -37,7 +37,7 @@ logging.info('Begin aggregate.py')
 # Follow sphinx documentation style
 # Manage default number of shards
 # Introduce support for day lag
-
+# Turn into a class
 
 # Import Config File
 CONF = yaml.safe_load(open('conf.yaml'))
@@ -49,8 +49,12 @@ D2_CUTOFF = params['d2-cutoff']
 OUT_INDEX_NAME = params['final-out-index']
 
 # Number of months to look back for contributor interval
-# This means we have to start this many months after 1970-01-01
+# Some info: Look back interval is actually min(months since start, TRACKING_LAG_PERIOD)
+# Also, if TRACKING_LAG_PERIOD is 6, and the bucket is 2020-08-01 for example,
+# It actually means that there will be data considered from August 2020, and all 5 months prior to August
+# (March, April, May, June, July).
 TRACKING_LAG_PERIOD = CONF['tracking-params']['tracking_interval_num_months']
+CONTRIBUTION_TYPES_TO_ANALYZE = CONF['github-params']['all_event_types_analyzed']
 START_TIME = (datetime.strptime('1970-01-01', "%Y-%m-%d") + relativedelta(months=+6)).strftime("%Y-%m-%d")
 
 print(f"Cutoffs {D1_CUTOFF}, {D2_CUTOFF} / tracking period {TRACKING_LAG_PERIOD} months")
@@ -74,6 +78,11 @@ query = {
                     "lt": datetime.now().strftime("%Y-%m-%d")
                 }
             }
+            },
+            {
+                "terms": {
+                    "event_type": CONTRIBUTION_TYPES_TO_ANALYZE
+                }
             }
         ]
     }
@@ -184,10 +193,10 @@ def get_contributors():  # TODO allow options
         # If stack hits capacity we have to remove the earliest month
         if len(buckets_in_consideration) >= TRACKING_LAG_PERIOD:
             popped_item = buckets_in_consideration.popleft()
-            print(f" POPPED ITEM {popped_item}")
+            # print(f" POPPED ITEM {popped_item}") # TODO test if the right item is popped
         else:
             buckets_in_consideration.append(result['actor']['buckets'])
-            print(f"New bucket size is {len(buckets_in_consideration)}")
+            # print(f"New bucket size is {len(buckets_in_consideration)}")
 
         # info: Append the current bucket to the list of cumulative buckets (will have repeats)
         # cumulative_bucket_authors.extend(result['actor']['buckets'])
@@ -275,6 +284,6 @@ def calculate_cr_series(numerators, denominators):
 
     return cr_series
 
-
+# Toggle these on for debug
 d2, d1 = get_contributors()  # Returns numerator, denominator (convert to, convert from)
-helpers.bulk(es, calculate_cr_series(d2, d1))
+helpers.bulk(es, calculate_cr_series(d2, d1)) # Bulk upload
