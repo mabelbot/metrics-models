@@ -44,8 +44,8 @@ CONF = yaml.safe_load(open('conf.yaml'))
 params = CONF['conversion-params']
 
 # Set Parameters from Imported Config File
-D1_CUTOFF = params['d1-cutoff']
-D2_CUTOFF = params['d2-cutoff']
+D1_CUTOFF = params['denominator-cutoff']
+D2_CUTOFF = params['numerator-cutoff']
 OUT_INDEX_NAME = params['final-out-index']
 
 # Number of months to look back for contributor interval
@@ -179,6 +179,7 @@ def get_contributors():  # TODO allow options
     converters = set()
     date_of_first_contribution_by_uuid = {}
     buckets_in_consideration = deque()  # Contains only data within a Lag Time behind.
+    popped_item = []  # This list will be empty until we have passed at least Lag Time months from start
 
     # Compare bucket i to i-1
     # test: Earliest is 2017-01-20 for Augur, first bucket is 2017-01-01 start
@@ -199,7 +200,7 @@ def get_contributors():  # TODO allow options
             # print(f"New bucket size is {len(buckets_in_consideration)}")
 
         # info: Append the current bucket to the list of cumulative buckets (will have repeats)
-        # cumulative_bucket_authors.extend(result['actor']['buckets'])
+            # cumulative_bucket_authors is a LIST of {'key': , 'doc_count: } dictionaries
         cumulative_bucket_authors = [val for sublist in list(buckets_in_consideration) for val in sublist]
 
         for j, c in enumerate(result['actor']['buckets']):
@@ -209,10 +210,13 @@ def get_contributors():  # TODO allow options
         # info: get list of cumulative contributions as pairs of author uuid/count if they are in d1 cutoff
         # d1 is a flat dictionary of uuid: count
         d1 = contributors_filtered_by_cutoff(cumulative_bucket_authors, D1_CUTOFF, D2_CUTOFF)  # TODO need this cutoff or else will double count in denominator
+        print(f"d1 is: {d1}")
         denominators[bucket_start_date] = d1
 
         if i > 0:
-            d2 = contributors_filtered_by_cutoff(cumulative_bucket_authors, D2_CUTOFF + 1, None)
+            # Include a total of Lag Time + 1 months in the numerator calculation
+            d2 = contributors_filtered_by_cutoff(popped_item + cumulative_bucket_authors, D2_CUTOFF + 1, None)
+            print(f"d2 is: {d2}")
             # info: Include first time converters only
             numerators[bucket_start_date] = dict(filter(lambda x: (x[0] not in converters) or date_of_first_contribution_by_uuid[x[0]] == bucket_start_date,
                                                         d2.items()))
@@ -275,7 +279,7 @@ def calculate_cr_series(numerators, denominators):
             "_source": {
                 'date_of_conversion': date,
                 'conversion_rate': len(converters) / len(denominators[timestamps[i]])
-                if len(denominators[timestamps[i]]) else float(0),
+                    if len(denominators[timestamps[i]]) else float(0),
                 'num_converters': int(len(converters)),
                 'converters': list(converters)
             }
