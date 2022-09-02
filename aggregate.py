@@ -38,6 +38,7 @@ logging.info('Begin aggregate.py')
 # Manage default number of shards
 # Introduce support for day lag
 # Turn into a class
+# Make it more flexible for interval (monthly is the only one allowed now)
 
 # Import Config File
 CONF = yaml.safe_load(open('conf.yaml'))
@@ -179,58 +180,75 @@ def contributors_filtered_by_cutoff(bucket_data, lower_cutoff, upper_cutoff):
 
 
 def get_contributors(time_buckets_denominator, time_buckets_numerator):  # TODO allow options
+    """
+    Prepares 2 dictionaries for further computation - one for numerator and one for denominator.
+    Length of numerators dictionary will be of length 1 shorter than denominator.
+
+    Handles edge case for people jumping straight to higher level on first month
+    by adding them retroactively to the denominator of the month before to be included
+    in a conversion for this month. 
+    These people are not "true" conversions but must be included for completeness. TODO
+
+    Buckets begin at beginning of month with the first contributions,
+    e.g. Earliest contribution is 2017-01-20 for Augur, first bucket is 2017-01-01 start
+
+    :param time_buckets_denominator: data from ES query
+    :param time_buckets_numerator: data from ES query
+    :returns: dict[str, dict[str, int]] where they keys are timestamps and the values are 
+        dictionaries of uuid: count of valid contributions 
+    """
     cumulative_bucket_authors = []  # TODO transitioning this to a stack.
     numerators = {}
     denominators = {}
     converters = set()
     date_of_first_contribution_by_uuid = {}
-    buckets_in_consideration = deque()  # Contains only data within a Lag Time behind.
+    buckets_in_consideration_numerator = deque()  # Contains only data within a Lag Time behind.
+    buckets_in_consideration_denominator = deque()  # Contains only data within a Lag Time behind.
     popped_item = []  # This list will be empty until we have passed at least Lag Time months from start
+    time_buckets = zip(time_buckets_denominator, time_buckets_numerator) # Zip into tuple for shorter implementation
 
-    # Compare bucket i to i-1
-    # test: Earliest is 2017-01-20 for Augur, first bucket is 2017-01-01 start
-    # Procedure is to iterate over buckets until we get to the STARTING point of the interval, then compare with
-    # the ENDING point of the interval to see the conversion rate for that interval.
-    for i in range(len(time_buckets_numerator)):
-        result = time_buckets_numerator[i]
-        # info: Convert to <class 'datetime.datetime'>
-        bucket_start_date = parser.parse(result['key_as_string'])
-        prev_bucket_start_date = parser.parse(time_buckets[i-1]['key_as_string']) if i > 0 else None
+    for i, bucket in time_buckets:
+        # info: Use a current bucket (numerator or denominator does not matter) just to get the dates required
+        bucket_start_date = parser.parse(bucket[0]['key_as_string'])
+        prev_bucket_start_date = parser.parse(time_buckets[i-1][0]['key_as_string']) if i > 0 else None
 
         # info: Append the current bucket to the list of buckets in consideration
-        # If stack hits capacity we have to remove the earliest month
-        if len(buckets_in_consideration) >= TRACKING_LAG_PERIOD:
-            popped_item = buckets_in_consideration.popleft()
-            # print(f" POPPED ITEM {popped_item}") # TODO test if the right item is popped
+            # If stack hits capacity we have to remove the earliest month
+        if len(buckets_in_consideration_numerator) >= TRACKING_LAG_PERIOD:
+            assert len(buckets_in_consideration_numerator) == len(buckets_in_consideration_denominator)
+            buckets_in_consideration_numerator.popleft()
+            last_date_out_of_range_denominator = buckets_in_consideration_denominator.popleft()
+            # TODO test if the right item is popped
         else:
-            buckets_in_consideration.append(result['actor']['buckets'])
-            # print(f"New bucket size is {len(buckets_in_consideration)}")
+            buckets_in_consideration_denominator.append(bucket[0]['actor']['buckets'])
+            buckets_in_consideration_numerator.append(bucket[1]['actor']['buckets'])
+            # TODO check if in correct order
 
-        # info: Append the current bucket to the list of cumulative buckets (will have repeats)
-            # cumulative_bucket_authors is a LIST of {'key': , 'doc_count: } dictionaries
-        cumulative_bucket_authors = [val for sublist in list(buckets_in_consideration) for val in sublist]
+        # info: Flatten the current deque - cumulative_bucket_authors is a LIST of {'key': , 'doc_count: } dictionaries
+        cumulative_bucket_authors_denominator = [val for sublist in list(buckets_in_consideration_denominator) for val in sublist]
+        cumulative_bucket_authors_numerator = [val for sublist in list(buckets_in_consideration_numerator) for val in sublist]
 
-        for j, c in enumerate(result['actor']['buckets']):
+        # info: Collect first contribution date from the numerator for edge case
+        for j, c in enumerate(bucket[1]['actor']['buckets']):
             if c['key'] not in date_of_first_contribution_by_uuid:
                 date_of_first_contribution_by_uuid[c['key']] = bucket_start_date
 
-        # info: get list of cumulative contributions as pairs of author uuid/count if they are in d1 cutoff
-        # d1 is a flat dictionary of uuid: count
-        d1 = contributors_filtered_by_cutoff(cumulative_bucket_authors, D1_CUTOFF, D2_CUTOFF)  # TODO need this cutoff or else will double count in denominator
-        print(f"d1 is: {d1}")
+        # info: Perform filtering of denominator by numerical cutoff - d1 is a flat dictionary of uuid: count
+        d1 = contributors_filtered_by_cutoff(cumulative_bucket_authors_denominator, D1_CUTOFF, D2_CUTOFF)  # TODO need this cutoff or else will double count in denominator
         denominators[bucket_start_date] = d1
 
         if i > 0:
-            # Include a total of Lag Time + 1 months in the numerator calculation
-            d2 = contributors_filtered_by_cutoff(popped_item + cumulative_bucket_authors, D2_CUTOFF + 1, None)
-            print(f"d2 is: {d2}")
-            # info: Include first time converters only
-            numerators[bucket_start_date] = dict(filter(lambda x: (x[0] not in converters) or date_of_first_contribution_by_uuid[x[0]] == bucket_start_date,
-                                                        d2.items()))
-            # Register first time D2's here
+            d2 = contributors_filtered_by_cutoff(last_date_out_of_range_denominator + cumulative_bucket_authors, 
+                                                    D2_CUTOFF + 1,
+                                                    None)
+
+            # info: Initially, we filtered to include first time contributors only to prevent re-conversions.
+                # Now, it is allowed. TODO allow option to disallow?
+            numerators[bucket_start_date] = d2
+
             first_time_D2 = dict(filter(lambda x: date_of_first_contribution_by_uuid[x[0]] == bucket_start_date,
                                                         d2.items()))
-            denominators[prev_bucket_start_date].update(first_time_D2)  # Add onto the previous denominator dict
+            denominators[prev_bucket_start_date].update(first_time_D2)
 
             converters.update(d2.keys())
 
@@ -242,6 +260,10 @@ def calculate_cr_series(numerators, denominators):
     Calculate a series of conversion rates at fixed intervals by comparing contributors
     at different levels after a certain time interval.
     Reindex the result.
+
+    # Compare bucket i to i-1
+    # Procedure is to iterate over buckets until we get to the STARTING point of the interval, then compare with
+    # the ENDING point of the interval to see the conversion rate for that interval.
 
     Numerators = level to
     Denominators = level from
