@@ -191,10 +191,11 @@ def get_contributors(time_buckets_denominator, time_buckets_numerator):  # TODO 
     # test: Earliest is 2017-01-20 for Augur, first bucket is 2017-01-01 start
     # Procedure is to iterate over buckets until we get to the STARTING point of the interval, then compare with
     # the ENDING point of the interval to see the conversion rate for that interval.
-    for i, result in enumerate(time_buckets):
+    for i in range(len(time_buckets_numerator)):
+        result = time_buckets_numerator[i]
         # info: Convert to <class 'datetime.datetime'>
         bucket_start_date = parser.parse(result['key_as_string'])
-        prev_bucket_start_date = parser.parse(time_buckets[i-1]['key_as_string'])
+        prev_bucket_start_date = parser.parse(time_buckets[i-1]['key_as_string']) if i > 0 else None
 
         # info: Append the current bucket to the list of buckets in consideration
         # If stack hits capacity we have to remove the earliest month
