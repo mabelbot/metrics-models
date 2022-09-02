@@ -179,7 +179,7 @@ def contributors_filtered_by_cutoff(bucket_data, lower_cutoff, upper_cutoff):
     return dict(filter(lambda x: lower_cutoff <= int(x[1]) <= upper_cutoff, contributions_by_uuid))
 
 
-def get_contributors(time_buckets_denominator, time_buckets_numerator):  # TODO allow options
+def get_contributors(time_buckets_denominator, time_buckets_numerator):
     """
     Prepares 2 dictionaries for further computation - one for numerator and one for denominator.
     Length of numerators dictionary will be of length 1 shorter than denominator.
@@ -197,23 +197,21 @@ def get_contributors(time_buckets_denominator, time_buckets_numerator):  # TODO 
     :returns: dict[str, dict[str, int]] where they keys are timestamps and the values are 
         dictionaries of uuid: count of valid contributions 
     """
-    cumulative_bucket_authors = []  # TODO transitioning this to a stack.
     numerators = {}
     denominators = {}
     converters = set()
     date_of_first_contribution_by_uuid = {}
     buckets_in_consideration_numerator = deque()  # Contains only data within a Lag Time behind.
     buckets_in_consideration_denominator = deque()  # Contains only data within a Lag Time behind.
-    popped_item = []  # This list will be empty until we have passed at least Lag Time months from start
-    time_buckets = zip(time_buckets_denominator, time_buckets_numerator) # Zip into tuple for shorter implementation
-
-    for i, bucket in time_buckets:
+    last_date_out_of_range_denominator = []  # This list will be empty until we have passed at least Lag Time months from start
+    time_buckets = list(zip(time_buckets_denominator, time_buckets_numerator)) # Zip into tuple for shorter implementation
+    
+    for i, bucket in enumerate(time_buckets):
         # info: Use a current bucket (numerator or denominator does not matter) just to get the dates required
         bucket_start_date = parser.parse(bucket[0]['key_as_string'])
         prev_bucket_start_date = parser.parse(time_buckets[i-1][0]['key_as_string']) if i > 0 else None
 
         # info: Append the current bucket to the list of buckets in consideration
-            # If stack hits capacity we have to remove the earliest month
         if len(buckets_in_consideration_numerator) >= TRACKING_LAG_PERIOD:
             assert len(buckets_in_consideration_numerator) == len(buckets_in_consideration_denominator)
             buckets_in_consideration_numerator.popleft()
@@ -238,7 +236,7 @@ def get_contributors(time_buckets_denominator, time_buckets_numerator):  # TODO 
         denominators[bucket_start_date] = d1
 
         if i > 0:
-            d2 = contributors_filtered_by_cutoff(last_date_out_of_range_denominator + cumulative_bucket_authors, 
+            d2 = contributors_filtered_by_cutoff(last_date_out_of_range_denominator + cumulative_bucket_authors_numerator, 
                                                     D2_CUTOFF + 1,
                                                     None)
 
@@ -318,5 +316,5 @@ def calculate_cr_series(numerators, denominators):
     return cr_series
 
 # Toggle these on for debug
-# d2, d1 = get_contributors()  # Returns numerator, denominator (convert to, convert from)
-# helpers.bulk(es, calculate_cr_series(d2, d1)) # Bulk upload
+d2, d1 = get_contributors(time_buckets_denominator, time_buckets_numerator)  # Returns numerator, denominator (convert to, convert from)
+helpers.bulk(es, calculate_cr_series(d2, d1)) # Bulk upload
