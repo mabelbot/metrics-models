@@ -187,7 +187,8 @@ def get_contributors(time_buckets_denominator, time_buckets_numerator):
     Handles edge case for people jumping straight to higher level on first month
     by adding them retroactively to the denominator of the month before to be included
     in a conversion for this month. 
-    These people are not "true" conversions but must be included for completeness. TODO
+    These people are not "true" conversions but must be included for completeness. 
+    TODO turn on ability for converting twice?
 
     Buckets begin at beginning of month with the first contributions,
     e.g. Earliest contribution is 2017-01-20 for Augur, first bucket is 2017-01-01 start
@@ -259,6 +260,10 @@ def calculate_cr_series(numerators, denominators):
     at different levels after a certain time interval.
     Reindex the result.
 
+    Conversion rate is designated as 0 if there are no users in the denominator.
+
+    The result is equal to the length of the numerator since it is the shorter one.
+
     # Compare bucket i to i-1
     # Procedure is to iterate over buckets until we get to the STARTING point of the interval, then compare with
     # the ENDING point of the interval to see the conversion rate for that interval.
@@ -272,34 +277,26 @@ def calculate_cr_series(numerators, denominators):
     all others shared with numerators.
 
     Divides numerator at time t with denominator at time t-1 to get a conversion rate.
+
+    This calculation method relies on the identities of users who satisfied the cutoff.
+
+    Parallel bulk can be used to accelerate reindexing (see article by Lynn Kwong)
     """
     assert len(denominators) - len(numerators) == 1
-    numerators = collections.OrderedDict(sorted(numerators.items()))  # Assure dates line up
-    denominators = collections.OrderedDict(sorted(denominators.items()))  # Assure dates line up
-
+    numerators = collections.OrderedDict(sorted(numerators.items()))
+    denominators = collections.OrderedDict(sorted(denominators.items()))
+   
     timestamps = list(denominators.keys())
-    cr_series = []
 
     # Step through timestamps as numerator timestamps (for denominator, look 1 interval backwards)
     for i, date in enumerate(timestamps[1:]):
         logging.info(f"Now calculating CR for {date} with {numerators[date]} and {denominators[timestamps[i]]}")
 
-        # Find uuids who completed conversion (shared between sets)
-        # This excludes people who did not pass through the denominator phase by the time the denominator was
-        # calculated, but somehow ended up in the numerator phase by the time it was calculated
-        # This is due to the need to exclude people who have already been participating as conversions. TODO
-        # One person makes > D1 cutoff contributions in their first month, then they're not counted in the denominator?
-        # But if you dont use any cutoff, then you can get the same person converting twice. Which does not make sense.
-        # The third solution is to just count anyone who meets the D2 cutoff over anyone who makes the D1 cutoff but
-        # not the D2 one
-        # So there is an issue of people who never pass through the "new" phase given a certain
-        # cutoff and calculation interval
-        # This line will handle no duplicate conversions after the denominator excludes non-new contributions first
+        # Find uuids who completed conversion (those which are shared between sets)
         converters = numerators[date].keys() & denominators[timestamps[i]].keys()
 
-        # Append tuple of conversion rate UP to this date.
-        cr_series.append((date, len(converters) / len(denominators[timestamps[i]]))
-                         if len(denominators[timestamps[i]]) else 0)
+        logging.info(f"Converters for {date} are {list(converters)}")
+
         doc = {
             "_index": OUT_INDEX_NAME,
             "_type": "_doc",
@@ -313,7 +310,6 @@ def calculate_cr_series(numerators, denominators):
         }
         yield doc
 
-    return cr_series
 
 # Toggle these on for debug
 d2, d1 = get_contributors(time_buckets_denominator, time_buckets_numerator)  # Returns numerator, denominator (convert to, convert from)
