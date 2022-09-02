@@ -54,7 +54,8 @@ OUT_INDEX_NAME = params['final-out-index']
 # It actually means that there will be data considered from August 2020, and all 5 months prior to August
 # (March, April, May, June, July).
 TRACKING_LAG_PERIOD = CONF['tracking-params']['tracking_interval_num_months']
-CONTRIBUTION_TYPES_TO_ANALYZE = CONF['github-params']['all_event_types_analyzed']
+CONTRIBUTION_TYPES_DENOMINATOR = CONF['conversion-params']['denominator_events']
+CONTRIBUTION_TYPES_NUMERATOR = CONF['conversion-params']['numerator_events']
 START_TIME = (datetime.strptime('1970-01-01', "%Y-%m-%d") + relativedelta(months=+6)).strftime("%Y-%m-%d")
 
 print(f"Cutoffs {D1_CUTOFF}, {D2_CUTOFF} / tracking period {TRACKING_LAG_PERIOD} months")
@@ -65,8 +66,8 @@ print(f"Cutoffs {D1_CUTOFF}, {D2_CUTOFF} / tracking period {TRACKING_LAG_PERIOD}
 # Make sure index clean before use if exists (syntax will be different in ES v. 8+)
 es.indices.delete(index=OUT_INDEX_NAME, ignore=[400, 404])
 
-# Query filter by author
-query = {
+
+query_denominator = {
     "bool": {
         "must": [
             #         { "match": { "actor_id": "44bdeb72febce7cd43244acdee5dab8dd6a702d8" }}
@@ -81,46 +82,43 @@ query = {
             },
             {
                 "terms": {
-                    "event_type": CONTRIBUTION_TYPES_TO_ANALYZE
+                    "event_type": CONTRIBUTION_TYPES_DENOMINATOR
                 }
             }
         ]
     }
 }
 
-# Query Aggregate
-# aggs = {
 
-#         "contributions": {
-#           "terms": { "field": "actor_id" }
-
-#   }
-# }
+query_numerator = {
+    "bool": {
+        "must": [
+            #         { "match": { "actor_id": "44bdeb72febce7cd43244acdee5dab8dd6a702d8" }}
+        ],
+        "filter": [
+            {"range": {
+                "grimoire_creation_date": {
+                    "gte": '1970-01-01',
+                    "lt": datetime.now().strftime("%Y-%m-%d")
+                }
+            }
+            },
+            {
+                "terms": {
+                    "event_type": CONTRIBUTION_TYPES_NUMERATOR
+                }
+            }
+        ]
+    }
+}
 
 
 # Aggregate per month, then aggregate per actor_id
-aggs_ahead = {
+aggs = {
     "contribs_over_time": {
         "date_histogram": {
             "field": "grimoire_creation_date",
             "interval": "month"
-        },
-        "aggs": {  # 2nd level sub-bucket aggregation
-            "actor": {
-                "terms": {
-                    "field": "actor_id"
-                }
-            }
-        }
-    }
-}
-
-aggs_behind = {
-    "contribs_over_time": {
-        "date_histogram": {
-            "field": "grimoire_creation_date",
-            "interval": "month",
-            "offset": "-1d"
         },
         "aggs": {  # 2nd level sub-bucket aggregation
             "actor": {
@@ -139,13 +137,21 @@ sort = {
 # Note that time buckets will be grouped by a date and a time of 00:00, such as '2016-12-31T00:00:00.000Z'
 # This bucket is a START interval, so it counts everything from that date until the day BEFORE the next
 # bucket's start date, at 11:59pm
-# The offset buckets are all 1 day behind the normal time_buckets
-time_buckets = es.search(index="github_event_enriched_combined",
+# The types of contributions filtered with the numerator and denominator are different, so they will need different queries
+# TODO adjust this to work with less in-memory computation
+time_buckets_denominator = es.search(index="github_event_enriched_combined",
                          size=2,
-                         query=query,
+                         query=query_denominator,
                          sort=sort,
-                         aggs=aggs_ahead)['aggregations']['contribs_over_time']['buckets']
+                         aggs=aggs)['aggregations']['contribs_over_time']['buckets']
 
+time_buckets_numerator= es.search(index="github_event_enriched_combined",
+                         size=2,
+                         query=query_numerator,
+                         sort=sort,
+                         aggs=aggs)['aggregations']['contribs_over_time']['buckets']
+
+print("breakpoint")
 
 def contributors_filtered_by_cutoff(bucket_data, lower_cutoff, upper_cutoff):
     """
@@ -172,7 +178,7 @@ def contributors_filtered_by_cutoff(bucket_data, lower_cutoff, upper_cutoff):
     return dict(filter(lambda x: lower_cutoff <= int(x[1]) <= upper_cutoff, contributions_by_uuid))
 
 
-def get_contributors():  # TODO allow options
+def get_contributors(time_buckets_denominator, time_buckets_numerator):  # TODO allow options
     cumulative_bucket_authors = []  # TODO transitioning this to a stack.
     numerators = {}
     denominators = {}
@@ -289,5 +295,5 @@ def calculate_cr_series(numerators, denominators):
     return cr_series
 
 # Toggle these on for debug
-d2, d1 = get_contributors()  # Returns numerator, denominator (convert to, convert from)
-helpers.bulk(es, calculate_cr_series(d2, d1)) # Bulk upload
+# d2, d1 = get_contributors()  # Returns numerator, denominator (convert to, convert from)
+# helpers.bulk(es, calculate_cr_series(d2, d1)) # Bulk upload
