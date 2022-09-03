@@ -17,13 +17,13 @@ print(elasticsearch.__version__)
 es = Elasticsearch("http://localhost:9200", use_ssl=False, verify_certs=False, ssl_no_validate=True,
                    connection_class=RequestsHttpConnection)
 
-logging.basicConfig(filename='conversion_rate.log', filemode='w',
+logging.basicConfig(filename='aggregate.log', filemode='w',
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s - [AGGREGATE.PY]', level=logging.INFO)
 logging.info('Begin aggregate.py')
 
 # TODO
 # Introduce secondary filtering for D levels
-# Write back into index
+# Introdduce allow_multiple_conversions
 # Deal with issues -> pull requests later.
 # Config file for d0 d1, etc
 # Check imports are compatible with versions (requirementx)
@@ -58,6 +58,7 @@ TRACKING_LAG_PERIOD = CONF['tracking-params']['tracking_interval_num_months']
 CONTRIBUTION_TYPES_DENOMINATOR = CONF['conversion-params']['denominator_events']
 CONTRIBUTION_TYPES_NUMERATOR = CONF['conversion-params']['numerator_events']
 START_TIME = (datetime.strptime('1970-01-01', "%Y-%m-%d") + relativedelta(months=+6)).strftime("%Y-%m-%d")
+ALLOW_MULTIPLE_CONVERSIONS = CONF['conversion-params']['allow_multiple_conversions']
 
 print(f"Cutoffs {D1_CUTOFF}, {D2_CUTOFF} / tracking period {TRACKING_LAG_PERIOD} months")
 
@@ -152,7 +153,6 @@ time_buckets_numerator= es.search(index="github_event_enriched_combined",
                          sort=sort,
                          aggs=aggs)['aggregations']['contribs_over_time']['buckets']
 
-print("breakpoint")
 
 def contributors_filtered_by_cutoff(bucket_data, lower_cutoff, upper_cutoff):
     """
@@ -229,7 +229,6 @@ def get_contributors(time_buckets_denominator, time_buckets_numerator):
 
         # info: Collect first contribution date from the numerator for edge case
         for j, c in enumerate(bucket[1]['actor']['buckets']):
-            print(f"bucket {bucket[1]}")
             if c['key'] not in date_of_first_contribution_by_uuid:
                 date_of_first_contribution_by_uuid[c['key']] = bucket_start_date
 
@@ -270,7 +269,7 @@ def calculate_cr_series(numerators, denominators, converters_all):
     This calculation method takes the union of the numerators and denominators, 
     calculates its size and divides that by the size of the denominators.
 
-    TODO add part where people cannot convert twice
+    TODO test set difference
 
     Constraints: 
     - Time stamps must match with denominators consisting of 1 earlier time stamp and
@@ -278,11 +277,16 @@ def calculate_cr_series(numerators, denominators, converters_all):
     - Conversion rate is designated as 0 if there are no users in the denominator.
 
     Parallel bulk can be used to accelerate reindexing (see article by Lynn Kwong)
+
+    :param numerators: Output from get_contributors (dict[datetime, dict[str, int]])
+    :param denomiantors: Output from get_contributors (dict[datetime, dict[str, int]])
+    :returns: None
     """
     assert len(denominators) - len(numerators) == 1
     numerators = collections.OrderedDict(sorted(numerators.items()))
     denominators = collections.OrderedDict(sorted(denominators.items()))
     logging.info(f"Numerators length {len(numerators)} and denominators length {len(denominators)}")
+    has_converted_before = set()
     
     timestamps = list(denominators.keys())
 
@@ -291,8 +295,11 @@ def calculate_cr_series(numerators, denominators, converters_all):
         logging.info(f"Now calculating CR for {date} with {numerators[date]} and {denominators[timestamps[i]]}")
 
         # Find uuids who completed conversion (those which are shared between sets)
-        converters = numerators[date].keys() & denominators[timestamps[i]].keys()
+        converters = (numerators[date].keys() & denominators[timestamps[i]].keys()) - has_converted_before
         converters_all.append(converters)
+        has_converted_before.update(converters)
+
+        logging.info(f"By the end of month {date} these people converted {converters}")
 
         logging.info(f"Converters for {date} are {list(converters)}")
 
@@ -315,3 +322,4 @@ d2, d1 = get_contributors(time_buckets_denominator, time_buckets_numerator)  # R
 converters_all = []
 helpers.bulk(es, calculate_cr_series(d2, d1, converters_all)) # Bulk upload
 
+print(converters_all)
