@@ -20,8 +20,6 @@ MAX_BULK_UPDATE_SIZE = 100
 # Optimize runtime for larger datasets
 # Allow D cutoffs to be not just numerical but include types of activities as well
 # Put results back into elasticsearch for visualization later
-# specify docstrings fully, refactor d cutoff methods
-# Follow sphinx documentation style
 # Manage default number of shards
 # Introduce support for non month lag periods and test the other sizes of lag times
 # Turn into a class
@@ -172,7 +170,7 @@ class Aggregate():
         return dict(filter(lambda x: lower_cutoff <= int(x[1]) <= upper_cutoff, contributions_by_uuid))
 
 
-    def get_contributors(self, time_buckets_denominator, time_buckets_numerator):
+    def get_contributors(self):
         """
         Prepares 2 dictionaries for further computation - one for numerator and one for denominator.
         Length of numerators dictionary will be of length 1 shorter than denominator.
@@ -186,8 +184,6 @@ class Aggregate():
         Buckets begin at beginning of month with the first contributions,
         e.g. Earliest contribution is 2017-01-20 for Augur, first bucket is 2017-01-01 start
 
-        :param time_buckets_denominator: data from ES query
-        :param time_buckets_numerator: data from ES query
         :returns: dict[str, dict[str, int]] where they keys are timestamps and the values are 
             dictionaries of uuid: count of valid contributions 
         """
@@ -198,7 +194,7 @@ class Aggregate():
         buckets_in_consideration_numerator = deque()  # Contains only data within a Lag Time behind.
         buckets_in_consideration_denominator = deque()  # Contains only data within a Lag Time behind.
         last_date_out_of_range_numerator = []  # This list will be empty until we have passed at least Lag Time months from start
-        time_buckets = list(zip(time_buckets_denominator, time_buckets_numerator)) # Zip into tuple for shorter implementation
+        time_buckets = list(zip(self.time_buckets_denominator, self.time_buckets_numerator)) # Zip into tuple for shorter implementation
         
         for i, bucket in enumerate(time_buckets):
             # info: Use a current bucket (numerator or denominator does not matter) just to get the dates required
@@ -316,10 +312,12 @@ if __name__ == '__main__':
     print(elasticsearch.__version__)
 
     # # Toggle these on for debug
-    # d2, d1 = get_contributors(time_buckets_denominator, time_buckets_numerator)  # Returns numerator, denominator (convert to, convert from)
     # converters_all = []
     # helpers.bulk(es, calculate_cr_series(d2, d1, converters_all)) # Bulk upload
 
     conversion_rate_model = Aggregate(**CONF)
+    d2, d1 = conversion_rate_model.get_contributors()
+    converters_all = []
+    helpers.bulk(conversion_rate_model.es, conversion_rate_model.calculate_cr_series(d2, d1, converters_all))
     
     logging.info("Exit main method")
