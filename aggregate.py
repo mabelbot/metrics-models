@@ -297,7 +297,8 @@ def calculate_cr_series(numerators, denominators, converters_all):
         # Find uuids who completed conversion (those which are shared between sets)
         converters = (numerators[date].keys() & denominators[timestamps[i]].keys()) - has_converted_before
         converters_all.append(converters)
-        has_converted_before.update(converters)
+        if not ALLOW_MULTIPLE_CONVERSIONS: 
+            has_converted_before.update(converters) # Update "converted" set with current converters
 
         logging.info(f"By the end of month {date} these people converted {converters}")
 
