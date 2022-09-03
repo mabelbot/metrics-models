@@ -46,10 +46,10 @@ class Aggregate():
         # It actually means that there will be data considered from August 2020, and all 5 months prior to August
         # (March, April, May, June, July).
         self.tracking_lag_period = kwargs.get('tracking-params').get('tracking_interval_num_months')
-        self.contribution_types_denominator = CONF['conversion-params']['denominator_events']
-        self.contribution_types_numerator = CONF['conversion-params']['numerator_events']
+        self.contribution_types_denominator = kwargs.get('conversion-params').get('denominator_events')
+        self.contribution_types_numerator = kwargs.get('conversion-params').get('numerator_events')
         self.start_time = (datetime.strptime('1970-01-01', "%Y-%m-%d") + relativedelta(months=+6)).strftime("%Y-%m-%d")
-        self.allow_multiple_conversions = CONF['conversion-params']['allow_multiple_conversions']
+        self.allow_multiple_conversions = kwargs.get('conversion-params').get('allow_multiple_conversions')
 
         print(f"Cutoffs {self.d1_cutoff}, {self.d2_cutoff} / tracking period {self.tracking_lag_period} months")
 
@@ -309,16 +309,15 @@ class Aggregate():
 
 
 if __name__ == '__main__':
-    CONF = yaml.safe_load(open('conf.yaml'))
-    print(elasticsearch.__version__)
+    # CONF = yaml.safe_load(open('conf.yaml'))
+    # print(elasticsearch.__version__)
 
-    # # Toggle these on for debug
+    # # # Toggle these on for debug
+    # # converters_all = []
+    # # helpers.bulk(es, calculate_cr_series(d2, d1, converters_all)) # Bulk upload
+
+    # conversion_rate_model = Aggregate(**CONF)
+    # d2, d1 = conversion_rate_model.get_contributors()
     # converters_all = []
-    # helpers.bulk(es, calculate_cr_series(d2, d1, converters_all)) # Bulk upload
-
-    conversion_rate_model = Aggregate(**CONF)
-    d2, d1 = conversion_rate_model.get_contributors()
-    converters_all = []
-    helpers.bulk(conversion_rate_model.es, conversion_rate_model.calculate_cr_series(d2, d1, converters_all))
-    
-    logging.info("Exit main method")
+    # helpers.bulk(conversion_rate_model.es, conversion_rate_model.calculate_cr_series(d2, d1, converters_all))
+    pass
