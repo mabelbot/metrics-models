@@ -39,6 +39,9 @@ class Aggregate():
         self.d1_cutoff = kwargs.get('conversion-params').get('denominator-cutoff')
         self.d2_cutoff = kwargs.get('conversion-params').get('numerator-cutoff')
         self.out_index_name = kwargs.get('conversion-params').get('final-out-index')
+        self.from_date = kwargs.get('tracking-params').get('from_date')
+        if not from_date:
+            from_date = '1970-01-01'
 
         # Number of months to look back for contributor interval
         # Some info: Look back interval is actually min(months since start, self.tracking_lag_period)
@@ -68,7 +71,7 @@ class Aggregate():
                 "filter": [
                     {"range": {
                         "grimoire_creation_date": {
-                            "gte": '1970-01-01',
+                            "gte": self.from_date,
                             "lt": datetime.now().strftime("%Y-%m-%d")
                         }
                     }
@@ -92,7 +95,7 @@ class Aggregate():
                 {
                     "range": {
                     "grimoire_creation_date": {
-                        "gte": '1970-01-01',
+                        "gte": self.from_date,
                         "lt": datetime.now().strftime("%Y-%m-%d")
                     }
                     }
@@ -320,4 +323,5 @@ if __name__ == '__main__':
     # d2, d1 = conversion_rate_model.get_contributors()
     # converters_all = []
     # helpers.bulk(conversion_rate_model.es, conversion_rate_model.calculate_cr_series(d2, d1, converters_all))
+    print(elasticsearch.__version__)
     pass
