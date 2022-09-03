@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright (C) 2021-2022 Yehu Wang, Chenqi Shan
+# Copyright (C) 2021-2022 Yehu Wangi, Chenqi Shan, Mabel Furutsuki
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -356,7 +356,7 @@ class ConversionRateMetricsModel(MetricsModel):
                     # This is the old UUID from Sorting Hat that may not be combined
                     'github_repo': hit['_source.github_repo'],
                     'grimoire_creation_date': hit['_source.grimoire_creation_date'],
-                    'issue_url': hit['_source.issue_url'],  # Full url of issue
+                    'issue_url': hit['_source.url'],  # Full url of issue including anchor
                     'item_type': hit['_source.item_type'],  # The type of the item, in this case it's (issue/comment).
                     'metadata__enriched_on': hit['_source.metadata__enriched_on'],
                     'metadata__filter_raw': hit['_source.metadata__filter_raw'],
@@ -483,7 +483,7 @@ class ConversionRateMetricsModel(MetricsModel):
                     'author_uuid': hit['_source.author_uuid'], # This is the old UUID from Sorting Hat that may not be combined
                     'github_repo': hit['_source.github_repo'],
                     'grimoire_creation_date': hit['_source.grimoire_creation_date'], # Main Date field	Pull request/comment creation date.
-                    'issue_url': hit['_source.url'],  # Full url to the PR's comment anchor
+                    'issue_url': hit['_source.url'],  # Full url to the PR's comment including anchor
                     'item_type': hit['_source.sub_type'], # Type of item (PR (review) comment)
                     'metadata__enriched_on': hit['_source.metadata__enriched_on'],
                     'metadata__filter_raw': hit['_source.metadata__filter_raw'],
