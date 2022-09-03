@@ -204,7 +204,7 @@ def get_contributors(time_buckets_denominator, time_buckets_numerator):
     date_of_first_contribution_by_uuid = {}
     buckets_in_consideration_numerator = deque()  # Contains only data within a Lag Time behind.
     buckets_in_consideration_denominator = deque()  # Contains only data within a Lag Time behind.
-    last_date_out_of_range_denominator = []  # This list will be empty until we have passed at least Lag Time months from start
+    last_date_out_of_range_numerator = []  # This list will be empty until we have passed at least Lag Time months from start
     time_buckets = list(zip(time_buckets_denominator, time_buckets_numerator)) # Zip into tuple for shorter implementation
     
     for i, bucket in enumerate(time_buckets):
@@ -215,8 +215,8 @@ def get_contributors(time_buckets_denominator, time_buckets_numerator):
         # info: Append the current bucket to the list of buckets in consideration
         if len(buckets_in_consideration_numerator) >= TRACKING_LAG_PERIOD:
             assert len(buckets_in_consideration_numerator) == len(buckets_in_consideration_denominator)
-            buckets_in_consideration_numerator.popleft()
-            last_date_out_of_range_denominator = buckets_in_consideration_denominator.popleft()
+            last_date_out_of_range_numerator = buckets_in_consideration_numerator.popleft()
+            buckets_in_consideration_denominator.popleft()
             # TODO test if the right item is popped
         else:
             buckets_in_consideration_denominator.append(bucket[0]['actor']['buckets'])
@@ -229,6 +229,7 @@ def get_contributors(time_buckets_denominator, time_buckets_numerator):
 
         # info: Collect first contribution date from the numerator for edge case
         for j, c in enumerate(bucket[1]['actor']['buckets']):
+            print(f"bucket {bucket[1]}")
             if c['key'] not in date_of_first_contribution_by_uuid:
                 date_of_first_contribution_by_uuid[c['key']] = bucket_start_date
 
@@ -237,7 +238,7 @@ def get_contributors(time_buckets_denominator, time_buckets_numerator):
         denominators[bucket_start_date] = d1
 
         if i > 0:
-            d2 = contributors_filtered_by_cutoff(last_date_out_of_range_denominator + cumulative_bucket_authors_numerator, 
+            d2 = contributors_filtered_by_cutoff(last_date_out_of_range_numerator + cumulative_bucket_authors_numerator, 
                                                     D2_CUTOFF + 1,
                                                     None)
 
@@ -254,38 +255,35 @@ def get_contributors(time_buckets_denominator, time_buckets_numerator):
     return numerators, denominators
 
 
-def calculate_cr_series(numerators, denominators):
+def calculate_cr_series(numerators, denominators, converters_all):
     """
     Calculate a series of conversion rates at fixed intervals by comparing contributors
     at different levels after a certain time interval.
-    Reindex the result.
-
-    Conversion rate is designated as 0 if there are no users in the denominator.
-
-    The result is equal to the length of the numerator since it is the shorter one.
-
-    # Compare bucket i to i-1
-    # Procedure is to iterate over buckets until we get to the STARTING point of the interval, then compare with
-    # the ENDING point of the interval to see the conversion rate for that interval.
-
-    Numerators = level to
-    Denominators = level from
+    Reindex the resul for visualization.
 
     Numerators and denominators must be of length n and n+1 respectively,
     giving us n conversion rates.
-    Time stamps must match with denominators consisting of 1 earlier time stamp and
-    all others shared with numerators.
 
-    Divides numerator at time t with denominator at time t-1 to get a conversion rate.
+    Numerators = people in level to (no duplicates within a given date)
+    Denominators = people in level from (no duplicates within a given date)
 
-    This calculation method relies on the identities of users who satisfied the cutoff.
+    This calculation method takes the union of the numerators and denominators, 
+    calculates its size and divides that by the size of the denominators.
+
+    TODO add part where people cannot convert twice
+
+    Constraints: 
+    - Time stamps must match with denominators consisting of 1 earlier time stamp and
+    all others shared with numerators. 
+    - Conversion rate is designated as 0 if there are no users in the denominator.
 
     Parallel bulk can be used to accelerate reindexing (see article by Lynn Kwong)
     """
     assert len(denominators) - len(numerators) == 1
     numerators = collections.OrderedDict(sorted(numerators.items()))
     denominators = collections.OrderedDict(sorted(denominators.items()))
-   
+    logging.info(f"Numerators length {len(numerators)} and denominators length {len(denominators)}")
+    
     timestamps = list(denominators.keys())
 
     # Step through timestamps as numerator timestamps (for denominator, look 1 interval backwards)
@@ -294,6 +292,7 @@ def calculate_cr_series(numerators, denominators):
 
         # Find uuids who completed conversion (those which are shared between sets)
         converters = numerators[date].keys() & denominators[timestamps[i]].keys()
+        converters_all.append(converters)
 
         logging.info(f"Converters for {date} are {list(converters)}")
 
@@ -313,4 +312,6 @@ def calculate_cr_series(numerators, denominators):
 
 # Toggle these on for debug
 d2, d1 = get_contributors(time_buckets_denominator, time_buckets_numerator)  # Returns numerator, denominator (convert to, convert from)
-helpers.bulk(es, calculate_cr_series(d2, d1)) # Bulk upload
+converters_all = []
+helpers.bulk(es, calculate_cr_series(d2, d1, converters_all)) # Bulk upload
+
