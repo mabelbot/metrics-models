@@ -8,15 +8,18 @@ tracking-params:
     from_date: '1970-01-01'
 
 conversion-params:
-    d1-cutoff: 1
-    d2-cutoff: 10
+    denominator-cutoff: 1
+    numerator-cutoff: 1
     final-out-index: conversion_rate_final
     group_A_uuids_sortinghat: []
     d0_uuids_sortinghat: []
     d0_events: []
-    d1_events: []
-    d2_events: []
-
+    denominator_events: ['CreatedEvent', 'CrossReferencedEvent', 'UpdatedCommentOnIssueEvent']
+    numerator_events: ['AddedToProjectEvent', 'ClosedEvent', 'LabeledEvent',
+                        'MovedColumnsInProjectEvent', 'RemovedFromProjectEvent', 'UnlabeledEvent', 'CreatedPREvent', 
+                        'PullRequestReview', 'MergedEvent', 'UpdatedCommentOnPREvent']
+    allow_multiple_conversions: False
+    # numerator_events must not be a superset of denominator_events or else conversion rates can hit 1 erroneously and not be useful for interpretation
 
 github-params:        
 #    'issue_index': Issue index
