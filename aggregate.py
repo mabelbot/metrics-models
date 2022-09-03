@@ -22,13 +22,9 @@ logging.basicConfig(filename='aggregate.log', filemode='w',
 logging.info('Begin aggregate.py')
 
 # TODO
-# Introduce secondary filtering for D levels
-# Introdduce allow_multiple_conversions
 # Deal with issues -> pull requests later.
-# Config file for d0 d1, etc
 # Check imports are compatible with versions (requirementx)
 # Turn in memory to in-database for performance? Turn into batch processing?
-# Turn this into a class
 # Write tests
 # Optimize runtime for larger datasets
 # Allow D cutoffs to be not just numerical but include types of activities as well
@@ -62,8 +58,6 @@ ALLOW_MULTIPLE_CONVERSIONS = CONF['conversion-params']['allow_multiple_conversio
 
 print(f"Cutoffs {D1_CUTOFF}, {D2_CUTOFF} / tracking period {TRACKING_LAG_PERIOD} months")
 
-
-# TODO add more options here
 
 # Make sure index clean before use if exists (syntax will be different in ES v. 8+)
 es.indices.delete(index=OUT_INDEX_NAME, ignore=[400, 404])
