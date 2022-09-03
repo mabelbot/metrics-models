@@ -22,7 +22,6 @@ MAX_BULK_UPDATE_SIZE = 100
 # Put results back into elasticsearch for visualization later
 # Manage default number of shards
 # Introduce support for non month lag periods and test the other sizes of lag times
-# Turn into a class
 # Make it more flexible for interval (monthly is the only one allowed now)
 
 
@@ -61,48 +60,50 @@ class Aggregate():
 
         # Prepare queries
         query_denominator = {
-        "bool": {
-        "must": [
-        #         { "match": { "actor_id": "44bdeb72febce7cd43244acdee5dab8dd6a702d8" }}
-        ],
-        "filter": [
-        {"range": {
-            "grimoire_creation_date": {
-                "gte": '1970-01-01',
-                "lt": datetime.now().strftime("%Y-%m-%d")
+            "bool": {
+                "must": [
+                #         { "match": { "actor_id": "44bdeb72febce7cd43244acdee5dab8dd6a702d8" }}
+                ],
+
+                "filter": [
+                    {"range": {
+                        "grimoire_creation_date": {
+                            "gte": '1970-01-01',
+                            "lt": datetime.now().strftime("%Y-%m-%d")
+                        }
+                    }
+                    },
+                    {
+                        "terms": {
+                            "event_type": self.contribution_types_denominator
+                        }
+                    }
+                ]
             }
-        }
-        },
-        {
-            "terms": {
-                "event_type": self.contribution_types_denominator
-            }
-        }
-        ]
-        }
         }
 
 
         query_numerator = {
-        "bool": {
-        "must": [
-        #         { "match": { "actor_id": "44bdeb72febce7cd43244acdee5dab8dd6a702d8" }}
-        ],
-        "filter": [
-        {"range": {
-            "grimoire_creation_date": {
-                "gte": '1970-01-01',
-                "lt": datetime.now().strftime("%Y-%m-%d")
+            "bool": {
+            "must": [
+                    #         { "match": { "actor_id": "44bdeb72febce7cd43244acdee5dab8dd6a702d8" }}
+                    ],
+            "filter": [
+                {
+                    "range": {
+                    "grimoire_creation_date": {
+                        "gte": '1970-01-01',
+                        "lt": datetime.now().strftime("%Y-%m-%d")
+                    }
+                    }
+                },
+                {
+                    "terms": {
+                        "event_type": self.contribution_types_numerator
+                    }
+                }
+            ]
             }
-        }
-        },
-        {
-            "terms": {
-                "event_type": self.contribution_types_numerator
-            }
-        }
-        ]
-        }
         }
 
 
