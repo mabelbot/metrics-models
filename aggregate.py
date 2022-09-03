@@ -109,23 +109,23 @@ class Aggregate():
 
         # Aggregate per month, then aggregate per actor_id
         aggs = {
-        "contribs_over_time": {
-        "date_histogram": {
-        "field": "grimoire_creation_date",
-        "interval": "month"
-        },
-        "aggs": {  # 2nd level sub-bucket aggregation
-        "actor": {
-            "terms": {
-                "field": "actor_id"
+            "contribs_over_time": {
+                "date_histogram": {
+                    "field": "grimoire_creation_date",
+                    "interval": "month"
+                },
+                "aggs": {  # 2nd level sub-bucket aggregation
+                    "actor": {
+                        "terms": {
+                            "field": "actor_id"
+                        }
+                    }
+                }
             }
-        }
-        }
-        }
         }
 
         sort = {
-        "grimoire_creation_date": {"order": "asc"}
+            "grimoire_creation_date": {"order": "asc"}
         }
 
         # Note that time buckets will be grouped by a date and a time of 00:00, such as '2016-12-31T00:00:00.000Z'
