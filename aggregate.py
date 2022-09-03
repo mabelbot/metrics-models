@@ -19,8 +19,8 @@ MAX_BULK_UPDATE_SIZE = 100
 # Write tests
 # Optimize runtime for larger datasets
 # Allow D cutoffs to be not just numerical but include types of activities as well
-# Put results back into elasticsearch for visualization later
 # Manage default number of shards
+# Overlapping visualizations for multiple communities
 # Introduce support for non month lag periods and test the other sizes of lag times
 # Make it more flexible for interval (monthly is the only one allowed now)
 
