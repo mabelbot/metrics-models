@@ -112,6 +112,7 @@ class ConversionRateMetricsModel(MetricsModel):
         self.githubql_index = kwargs.get('githubql_index')
         
         self.out_index_base = kwargs.get('general').get('out_index_base')
+        self.data_sources = kwargs.get('general').get('data_sources')
 
         self.github_repos = {} # Used for filtering repos by what user specifies
 
@@ -501,15 +502,22 @@ class ConversionRateMetricsModel(MetricsModel):
         #     label = "community"
         #     self.metrics_model_enrich(all_repos_list, self.community)
 
-        # At the project level, analyze multiple repositories at once under the label of project
+        # Analyze multiple repositories at once under the label of project
         if self.level == "project": 
             label = "project"
             all_repo_json = json.load(open(self.json_file))
             for project in all_repo_json:
                 repos_list = []
-                for j in all_repo_json[project][self.issue_index.split('_')[0]]:
-                    repos_list.append(j)
+                for j in all_repo_json[project]:
+                    if j in self.data_sources:
+                        repos_list.append(all_repo_json[project][j][0])
+                        self.github_repos[all_repo_json[project][j][0]] = project # Add to  dict[repo link str, project name str] 
                 self.metrics_model_enrich(label, self.out_index_base)
+                # conversion_rate_model = aggregate.Aggregate(**CONF)
+                # d2, d1 = conversion_rate_model.get_contributors()
+                # converters_all = []
+                # helpers.bulk(conversion_rate_model.es, conversion_rate_model.calculate_cr_series(d2, d1, converters_all))
+    
 
         # Enriches all repos provided, each considered individually
         if self.level == "repo": 
@@ -517,15 +525,16 @@ class ConversionRateMetricsModel(MetricsModel):
             all_repo_json = json.load(open(self.json_file))
             repos_list = []
             for project in all_repo_json:
-                for j in all_repo_json[project]: 
-                    repos_list.append(all_repo_json[project][j][0]) 
-                    # In repository case, the dictionary is 1 item long only
-                    self.github_repos = {all_repo_json[project][j][0] : project}  # dict[repo link str, project name str] 
-                    self.metrics_model_enrich(label, self.out_index_base)
-            # conversion_rate_model = aggregate.Aggregate(**CONF)
-            # d2, d1 = conversion_rate_model.get_contributors()
-            # converters_all = []
-            # helpers.bulk(conversion_rate_model.es, conversion_rate_model.calculate_cr_series(d2, d1, converters_all))
+                for j in all_repo_json[project]:
+                    if j in self.data_sources:
+                        repos_list.append(all_repo_json[project][j][0]) 
+                        # In repository case, the dictionary is 1 item long only
+                        self.github_repos = {all_repo_json[project][j][0] : project}  # dict[repo link str, project name str] 
+                        self.metrics_model_enrich(label, self.out_index_base)
+                        # conversion_rate_model = aggregate.Aggregate(**CONF)
+                        # d2, d1 = conversion_rate_model.get_contributors()
+                        # converters_all = []
+                        # helpers.bulk(conversion_rate_model.es, conversion_rate_model.calculate_cr_series(d2, d1, converters_all))
             
 
 class Mapping(BaseMapping):
