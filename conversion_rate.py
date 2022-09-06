@@ -108,7 +108,7 @@ class ConversionRateMetricsModel(MetricsModel):
         self.from_date = kwargs.get('from_date')
         self.lag_time_length = kwargs.get('lag_time_length')
         self.level = kwargs.get('general').get('level')
-        logging.info('Analyzing at level {self.level}')
+        logging.info(f'Analyzing at level: {self.level}')
 
         self.github_index = kwargs.get('github_index')
         self.githubql_index = kwargs.get('githubql_index')
@@ -582,4 +582,3 @@ if __name__ == '__main__':
     conversion_rate_model.metrics_model_metrics()
     logging.info("Exit main method")
 
-# Vscode update
