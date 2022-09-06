@@ -183,10 +183,11 @@ class ConversionRateMetricsModel(MetricsModel):
                 'value']
         return updated_issues_count
 
-    def metrics_model_enrich(self, label):
+    def metrics_model_enrich(self, label, out_index):
         """Wrapper for methods metrics_model_combine_indexes_github and metrics_models_combine_github2_prs """
-        self.metrics_model_combine_indexes_github()
-        self.metrics_models_combine_github2_prs() # Will need a different OUT index TODO
+        print("hello enrich")
+        self.metrics_model_combine_indexes_github(label, out_index)
+        self.metrics_models_combine_github2_prs(label, out_index) # Will need a different OUT index TODO
 
     def metrics_model_combine_indexes_github(self, label, out_index):  # todo figure out what to use for repos_list if it's the same index
         """
@@ -389,7 +390,6 @@ class ConversionRateMetricsModel(MetricsModel):
 
         es_out.bulk_upload(item_datas, 'uuid')
         item_datas = []
-
 
     def metrics_models_combine_github2_prs(self, label, out_index):
         """ 
