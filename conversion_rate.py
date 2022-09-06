@@ -274,6 +274,8 @@ class ConversionRateMetricsModel(MetricsModel):
                     # githubql necessary field
                     'created_at': hit['_source.created_at'],
                     # githubql necessary field - this is the one we'll use for identifying time
+                    'mode_level': label,
+                    'associated_project': self.github_repos[hit['_source.repository']]
                 }
                 item_datas.append(metrics_data)
                 if len(item_datas) >= MAX_BULK_UPDATE_SIZE:  # TODO >= or else you lose an item right?
@@ -353,7 +355,9 @@ class ConversionRateMetricsModel(MetricsModel):
                         '_source.is_github_issue_comment'] else "RedundantIssue",
                     # githubql necessary field TODO are we missing any issues
                     'created_at': hit['_source.comment_updated_at'],
-                    'comment_body': hit['_source.body']
+                    'comment_body': hit['_source.body'],
+                    'mode_level': label,
+                    'associated_project': self.github_repos[hit['_source.repository']]
                 }
 
                 item_datas.append(metrics_data)
@@ -374,6 +378,8 @@ class ConversionRateMetricsModel(MetricsModel):
             del hit["_id"]
             del hit['_type']
             del hit['_index']
+            hit['mode_level']: label
+            hit['associated_project']: self.github_repos[hit['_source']['repository']]
             item_datas.append(dict(hit)["_source"])
             if len(item_datas) >= MAX_BULK_UPDATE_SIZE:
                 self.github_es_out.bulk_upload(item_datas, 'uuid')  # TODO see above
@@ -399,6 +405,7 @@ class ConversionRateMetricsModel(MetricsModel):
         :param self: self
         :returns: None (in place modification only)
         """
+        es_out = ElasticSearch(elastic_url, index=out_index, mappings=Mapping(), clean=True)
         item_datas = []
         logging.info('Begin method: metrics_models_combine_github2_prs')
         # test_set = set()
@@ -449,7 +456,7 @@ class ConversionRateMetricsModel(MetricsModel):
                     'origin': hit['_source.origin'],
                     'tag': hit['_source.tag'],  # Perceval tag
                     'uuid': hit['_source.uuid'] + str(hashlib.md5(hit['_source.url'].encode()).hexdigest()),  # Perceval UUID + md5 hash
-                    'repository': hit['_source.repository'],  # Repository Name
+                    'repository': hit['_source.repository'],  # Repository Link
                     'author_bot': hit['_source.author_bot'],
                     # If author is a bot (also have user_data_bot and assignee_data_bot tbd)
                     'author_domain': hit['_source.author_domain'],  # Authors domain
@@ -473,16 +480,18 @@ class ConversionRateMetricsModel(MetricsModel):
                     'title': hit['_source.issue_title'],
                     'event_type': 'UpdatedCommentOnPREvent' if hit['_source.sub_type'] == 'review_comment' else "OtherPRComment",  # githubql necessary field
                     'created_at': hit['_source.comment_updated_at'],
-                    'comment_body': hit['_source.body']
+                    'comment_body': hit['_source.body'],
+                    'mode_level': label,
+                    'associated_project': self.github_repos[hit['_source.repository']]
                 }
 
                 item_datas.append(metrics_data)
                 if len(item_datas) >= MAX_BULK_UPDATE_SIZE:
                     logging.info(f'Bulk Uploading {len(item_datas)} items')
-                    self.github_es_out.bulk_upload(item_datas, 'uuid')  # TODO correct field to use
+                    es_out.bulk_upload(item_datas, 'uuid')  # TODO correct field to use
                     item_datas = []
 
-        self.github_es_out.bulk_upload(item_datas, 'uuid')
+        es_out.bulk_upload(item_datas, 'uuid')
         item_datas = []
         # print(len(test_set))
 
@@ -493,7 +502,7 @@ class ConversionRateMetricsModel(MetricsModel):
         """
         self.es_in = Elasticsearch(elastic_url, use_ssl=False, verify_certs=False,
                                    connection_class=RequestsHttpConnection)  # TODO does use_ssl have to be True?
-        self.github_es_out = ElasticSearch(elastic_url, index=self.out_index_base, mappings=Mapping(), clean=True)
+        # self.github_es_out = ElasticSearch(elastic_url, index=self.out_index_base, mappings=Mapping(), clean=True)
 
         # Depending on type of community , choose one or more of these levels
         # Community level is under construction -------------
@@ -512,7 +521,7 @@ class ConversionRateMetricsModel(MetricsModel):
                     if j in self.data_sources:
                         repos_list.append(all_repo_json[project][j][0])
                         self.github_repos[all_repo_json[project][j][0]] = project # Add to  dict[repo link str, project name str] 
-                self.metrics_model_enrich(label, self.out_index_base)
+                self.metrics_model_enrich(label, self.out_index_base + "_" + project)
                 # conversion_rate_model = aggregate.Aggregate(**CONF)
                 # d2, d1 = conversion_rate_model.get_contributors()
                 # converters_all = []
@@ -530,7 +539,7 @@ class ConversionRateMetricsModel(MetricsModel):
                         repos_list.append(all_repo_json[project][j][0]) 
                         # In repository case, the dictionary is 1 item long only
                         self.github_repos = {all_repo_json[project][j][0] : project}  # dict[repo link str, project name str] 
-                        self.metrics_model_enrich(label, self.out_index_base)
+                        self.metrics_model_enrich(label, self.out_index_base + "_" + all_repo_json[project][j][0][-1])
                         # conversion_rate_model = aggregate.Aggregate(**CONF)
                         # d2, d1 = conversion_rate_model.get_contributors()
                         # converters_all = []
