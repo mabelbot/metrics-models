@@ -2,6 +2,8 @@ url: "http://localhost:9200" # make sure this is http
 
 general:
     json_file: projects.json
+    level: repo
+    out_index_base: github_event_enriched_combined
 
 tracking-params:
     tracking_interval_num_months: 6 
@@ -19,10 +21,11 @@ conversion-params:
                         'MovedColumnsInProjectEvent', 'RemovedFromProjectEvent', 'UnlabeledEvent', 'CreatedPREvent', 
                         'PullRequestReview', 'MergedEvent', 'UpdatedCommentOnPREvent']
     allow_multiple_conversions: False
+    data_sources: ['github', 'githubql', 'github2'] # Can add however many desired
     # numerator_events must not be a superset of denominator_events or else conversion rates can hit 1 erroneously and not be useful for interpretation
 
 github-params:        
-#    'issue_index': Issue index
+#    'issue_index': Issue index (for this metric we do not need to consider a single issue index)
 #    'json_file': json file for repos messages
 #    'git_index': git index
     'github_index': github_issues_chaoss_enriched
@@ -32,7 +35,6 @@ github-params:
 #    'git_branch': None
 #    'from_date': '2020-01-01'
 #    'end_date': None
-    'github_out_index': github_event_enriched_combined
 #    'community': None
     'level': 'repo'
     'all_event_types_analyzed': ['CreatedEvent', 'AddedToProjectEvent', 'ClosedEvent', 'LabeledEvent', 'CrossReferencedEvent',
