@@ -107,6 +107,8 @@ class ConversionRateMetricsModel(MetricsModel):
         self.tracking_period_length = kwargs.get('tracking_period_length')
         self.from_date = kwargs.get('from_date')
         self.lag_time_length = kwargs.get('lag_time_length')
+        self.level = kwargs.get('general').get('level')
+        logging.info('Analyzing at level {self.level}')
 
         self.github_index = kwargs.get('github_index')
         self.githubql_index = kwargs.get('githubql_index')
@@ -204,15 +206,15 @@ class ConversionRateMetricsModel(MetricsModel):
 
         Use Actor ID to track events.
         """
-
+        es_out = ElasticSearch(elastic_url, index=out_index, mappings=Mapping(), clean=True)
         item_datas = []
         logging.info('Begin at combine indexes')
 
         # Append Github data for Event Creation Contributions (this contains PR and issue both) --------------
         search = scan(self.es_in,
-                      index=self.github_index,
-                      query={"query": {"match_all": {}}}
-                      )
+                    index=self.github_index,
+                    query={"query": {"match_all": {}}}
+                    )
         hits = []
 
         for hit in search:
@@ -279,17 +281,17 @@ class ConversionRateMetricsModel(MetricsModel):
                 }
                 item_datas.append(metrics_data)
                 if len(item_datas) >= MAX_BULK_UPDATE_SIZE:  # TODO >= or else you lose an item right?
-                    self.github_es_out.bulk_upload(item_datas, 'uuid')  # TODO which field to use here?
+                    es_out.bulk_upload(item_datas, 'uuid')  # TODO which field to use here?
                     item_datas = []
 
-        self.github_es_out.bulk_upload(item_datas, 'uuid')
+        es_out.bulk_upload(item_datas, 'uuid')
         item_datas = []
 
         # Append Github2 data ----------------------------------------------------------------------------------------
         search_github2 = scan(self.es_in,
-                              index=self.github2_issues_enriched_index,
-                              query={"query": {"match_all": {}}}
-                              )
+                            index=self.github2_issues_enriched_index,
+                            query={"query": {"match_all": {}}}
+                            )
         hits_github2 = []
 
         for hit in search_github2:
@@ -306,7 +308,7 @@ class ConversionRateMetricsModel(MetricsModel):
                 # Combine SortingHat uuids but only if they have not been combined before to save time
                 if hit['_source.user_login'] not in self.combined_users:
                     identities.combine_identities(hit['_source.user_login'], ['github', 'githubql',
-                                                                              'github2'])  # info: This is only relevant if an identity is present in both GH and GHQL
+                                                                            'github2'])  # info: This is only relevant if an identity is present in both GH and GHQL
                     self.combined_users.add(hit['_source.user_login'])
                     logging.info(f"Finished combine for this user - {hit['_source.user_login']}")
 
@@ -362,17 +364,17 @@ class ConversionRateMetricsModel(MetricsModel):
 
                 item_datas.append(metrics_data)
                 if len(item_datas) >= MAX_BULK_UPDATE_SIZE:  # TODO >= or else you lose an item right?
-                    self.github_es_out.bulk_upload(item_datas, 'uuid')  # TODO which field to use here?
+                    es_out.bulk_upload(item_datas, 'uuid')  # TODO which field to use here?
                     item_datas = []
 
-        self.github_es_out.bulk_upload(item_datas, 'uuid')
+        es_out.bulk_upload(item_datas, 'uuid')
         item_datas = []
 
         # Append Githubql data as-is ----------------------------------------------------------------------------------
         search = scan(self.es_in,
-                      index=self.githubql_index,
-                      query={"query": {"match_all": {}}}
-                      )
+                    index=self.githubql_index,
+                    query={"query": {"match_all": {}}}
+                    )
 
         for hit in search:
             del hit["_id"]
@@ -382,11 +384,12 @@ class ConversionRateMetricsModel(MetricsModel):
             hit['associated_project']: self.github_repos[hit['_source']['repository']]
             item_datas.append(dict(hit)["_source"])
             if len(item_datas) >= MAX_BULK_UPDATE_SIZE:
-                self.github_es_out.bulk_upload(item_datas, 'uuid')  # TODO see above
+                es_out.bulk_upload(item_datas, 'uuid')  # TODO see above
                 item_datas = []
 
-        self.github_es_out.bulk_upload(item_datas, 'uuid')
+        es_out.bulk_upload(item_datas, 'uuid')
         item_datas = []
+
 
     def metrics_models_combine_github2_prs(self, label, out_index):
         """ 
