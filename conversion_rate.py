@@ -105,21 +105,19 @@ class ConversionRateMetricsModel(MetricsModel):
                          kwargs.get('community'),
                          kwargs.get('level'))  # TODO change back to out index
         self.tracking_period_length = kwargs.get('tracking_period_length')
-        self.from_date = kwargs.get('from_date')
-        self.lag_time_length = kwargs.get('lag_time_length')
+        self.from_date = kwargs.get('tracking-params').get('from_date')
         self.level = kwargs.get('general').get('level')
         logging.info(f'Analyzing at level: {self.level}')
-
-        self.github_index = kwargs.get('github_index')
-        self.githubql_index = kwargs.get('githubql_index')
         
         self.out_index_base = kwargs.get('general').get('out_index_base')
         self.data_sources = kwargs.get('general').get('data_sources')
 
         self.github_repos = {} # Used for filtering repos by what user specifies
 
-        self.github2_issues_enriched_index = kwargs.get('github2_issues_enriched_index')
-        self.github2_pull_enriched_index = kwargs.get('github2_pull_enriched_index')
+        self.github_index = kwargs.get('github-params').get('github_index')
+        self.githubql_index = kwargs.get('github-params').kwargs.get('githubql_index')
+        self.github2_issues_enriched_index = kwargs.get('github-params').get('github2_issues_enriched_index')
+        self.github2_pull_enriched_index = kwargs.get('github-params').get('github2_pull_enriched_index')
         self.combined_users = set()
         # self.issue_index = issue_index
         # self.repo_index = repo_index
@@ -185,9 +183,9 @@ class ConversionRateMetricsModel(MetricsModel):
 
     def metrics_model_enrich(self, label, out_index):
         """Wrapper for methods metrics_model_combine_indexes_github and metrics_models_combine_github2_prs """
-        print("hello enrich")
+        logging.info(f'Entered metrics_model_enrich method with label {label} and out_index {out_index}')
         self.metrics_model_combine_indexes_github(label, out_index)
-        self.metrics_models_combine_github2_prs(label, out_index) # Will need a different OUT index TODO
+        self.metrics_models_combine_github2_prs(label, out_index)
 
     def metrics_model_combine_indexes_github(self, label, out_index):  # todo figure out what to use for repos_list if it's the same index
         """
