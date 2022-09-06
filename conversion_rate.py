@@ -501,10 +501,10 @@ class ConversionRateMetricsModel(MetricsModel):
         #     label = "community"
         #     self.metrics_model_enrich(all_repos_list, self.community)
 
-        # At the project level, 
+        # At the project level, analyze multiple repositories at once under the label of project
         if self.level == "project": 
             label = "project"
-            all_repo_json = json.load(open(self.json_file))  # This file is similar to projects.json
+            all_repo_json = json.load(open(self.json_file))
             for project in all_repo_json:
                 repos_list = []
                 for j in all_repo_json[project][self.issue_index.split('_')[0]]:
