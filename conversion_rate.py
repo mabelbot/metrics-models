@@ -32,6 +32,7 @@ import requests
 import hashlib
 from elasticsearch import Elasticsearch, RequestsHttpConnection
 from elasticsearch.helpers import scan
+from elasticsearch import helpers
 import logging
 
 from perceval.backend import uuid
@@ -50,7 +51,7 @@ from metric_model import MetricsModel
 import metric_model  # myc to import utils at the top - todo will move utils into their own module later
 import identities
 
-# import aggregate
+import aggregate
 
 db = Database('root', '', 'test_sh')  # TODO
 
@@ -99,8 +100,8 @@ class ConversionRateMetricsModel(MetricsModel):
             :param str githubql_index: name of the index that contains the grimoirelab-elk githubql.py enriched data (mixed issues/prs)
 
          """
-        super().__init__(kwargs.get('json_file'),
-                         kwargs.get('github_out_index'),
+        super().__init__(kwargs.get('general').get('json_file'),
+                         kwargs.get('general').get('out_index_base'),
                          kwargs.get('community'),
                          kwargs.get('level'))  # TODO change back to out index
         self.tracking_period_length = kwargs.get('tracking_period_length')
@@ -109,11 +110,10 @@ class ConversionRateMetricsModel(MetricsModel):
 
         self.github_index = kwargs.get('github_index')
         self.githubql_index = kwargs.get('githubql_index')
-        self.github_out_index = kwargs.get('github_out_index')
+        
+        self.out_index_base = kwargs.get('general').get('out_index_base')
 
-        self.github_repos = metric_model.get_all_repo(kwargs.get('json_file'), 'github') \
-                            + metric_model.get_all_repo(kwargs.get('json_file'),
-                                                        'githubql')  # Used for filtering repos by what user specifies
+        self.github_repos = {} # Used for filtering repos by what user specifies
 
         self.github2_issues_enriched_index = kwargs.get('github2_issues_enriched_index')
         self.github2_pull_enriched_index = kwargs.get('github2_pull_enriched_index')
@@ -180,35 +180,12 @@ class ConversionRateMetricsModel(MetricsModel):
                 'value']
         return updated_issues_count
 
-    def metrics_model_enrich(self, repos_list, label):
-        item_datas = []
+    def metrics_model_enrich(self, label):
+        """Wrapper for methods metrics_model_combine_indexes_github and metrics_models_combine_github2_prs """
+        self.metrics_model_combine_indexes_github()
+        self.metrics_models_combine_github2_prs() # Will need a different OUT index TODO
 
-        for date in self.date_list:
-            print(date)
-            created_since = self.created_since(date, repos_list)
-            if created_since < 0:
-                continue
-            metrics_data = {
-                'uuid': uuid(str(date), self.community, self.level, label),
-                'level': self.level,
-                'label': label,
-                'contributor_count': self.countributor_count(date, repos_list),
-                'D2_contributor_count': self.countributor_count_D2(date, repos_list),
-                'commit_frequence': self.commit_frequence(date, repos_list),
-                'created_since': '%.4f' % self.created_since(date, repos_list),
-                'closed_issue_count': self.closed_issue_count(date, repos_list),
-                'updated_issue_count': self.updated_issue_count(date, repos_list),
-                'grimoire_creation_date': date.isoformat(),
-                'metadata__enriched_on': datetime_utcnow().isoformat()
-            }
-            item_datas.append(metrics_data)
-            if len(item_datas) > MAX_BULK_UPDATE_SIZE:
-                self.es_out.bulk_upload(item_datas, "uuid")
-                item_datas = []
-        self.es_out.bulk_upload(item_datas, "uuid")
-        item_datas = []
-
-    def metrics_model_combine_indexes_github(self):  # todo figure out what to use for repos_list if it's the same index
+    def metrics_model_combine_indexes_github(self, label, out_index):  # todo figure out what to use for repos_list if it's the same index
         """
         Appends the necessary info from post-enrichment github_index to the existing 
         post-enrichment githubql_index for an index of contributions only. 
@@ -404,7 +381,7 @@ class ConversionRateMetricsModel(MetricsModel):
         self.github_es_out.bulk_upload(item_datas, 'uuid')
         item_datas = []
 
-    def metrics_models_combine_github2_prs(self):
+    def metrics_models_combine_github2_prs(self, label, out_index):
         """ 
         Purpose: Append data from github2 for comments on pull requests to output (combined) index.
 
@@ -515,27 +492,41 @@ class ConversionRateMetricsModel(MetricsModel):
         """
         self.es_in = Elasticsearch(elastic_url, use_ssl=False, verify_certs=False,
                                    connection_class=RequestsHttpConnection)  # TODO does use_ssl have to be True?
-        self.github_es_out = ElasticSearch(elastic_url, index=self.github_out_index, mappings=Mapping(), clean=True)
+        self.github_es_out = ElasticSearch(elastic_url, index=self.out_index_base, mappings=Mapping(), clean=True)
 
         # Depending on type of community , choose one or more of these levels
-        if self.level == "community":  # communities would take care of whole repo and SIG under organization
-            all_repos_list = self.all_repo
-            label = "community"
-            self.metrics_model_enrich(all_repos_list, self.community)
-        if self.level == "project":  # keywords project and community can be the same in some cases, but not when there are multiple levels (see Kubernetes) (an example is a SIG)
+        # Community level is under construction -------------
+        # if self.level == "community":  # communities would take care of whole repo and SIG under organization
+        #     all_repos_list = self.all_repo
+        #     label = "community"
+        #     self.metrics_model_enrich(all_repos_list, self.community)
+
+        # At the project level, 
+        if self.level == "project": 
+            label = "project"
             all_repo_json = json.load(open(self.json_file))  # This file is similar to projects.json
             for project in all_repo_json:
                 repos_list = []
                 for j in all_repo_json[project][self.issue_index.split('_')[0]]:
                     repos_list.append(j)
-                self.metrics_model_enrich(repos_list, project)
-        if self.level == "repo":
-            label = "repo"  # TODO when to use this?
-            self.metrics_model_combine_indexes_github()
-            self.metrics_models_combine_github2_prs()
-            # d2, d1 = aggregate.get_contributors()  # Returns numerator, denominator (convert to, convert from)
-            # aggregate.calculate_cr_series(d2, d1)  # Bulk update back to specified final index
+                self.metrics_model_enrich(label, self.out_index_base)
 
+        # Enriches all repos provided, each considered individually
+        if self.level == "repo": 
+            label = "repo"
+            all_repo_json = json.load(open(self.json_file))
+            repos_list = []
+            for project in all_repo_json:
+                for j in all_repo_json[project]: 
+                    repos_list.append(all_repo_json[project][j][0]) 
+                    # In repository case, the dictionary is 1 item long only
+                    self.github_repos = {all_repo_json[project][j][0] : project}  # dict[repo link str, project name str] 
+                    self.metrics_model_enrich(label, self.out_index_base)
+            # conversion_rate_model = aggregate.Aggregate(**CONF)
+            # d2, d1 = conversion_rate_model.get_contributors()
+            # converters_all = []
+            # helpers.bulk(conversion_rate_model.es, conversion_rate_model.calculate_cr_series(d2, d1, converters_all))
+            
 
 class Mapping(BaseMapping):
 
@@ -566,8 +557,7 @@ if __name__ == '__main__':
     tracking_kwargs = CONF['tracking-params']
     github_kwargs = CONF['github-params']
     general_kwargs = CONF['general']
-    combined_kwargs = dict(tracking_kwargs, **github_kwargs, **general_kwargs)
-    conversion_rate_model = ConversionRateMetricsModel(**combined_kwargs)
+    conversion_rate_model = ConversionRateMetricsModel(**CONF)
     conversion_rate_model.metrics_model_metrics()
     logging.info("Exit main method")
 
