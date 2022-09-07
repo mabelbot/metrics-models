@@ -115,7 +115,7 @@ class ConversionRateMetricsModel(MetricsModel):
         self.github_repos = {} # Used for filtering repos by what user specifies
 
         self.github_index = kwargs.get('github-params').get('github_index')
-        self.githubql_index = kwargs.get('github-params').kwargs.get('githubql_index')
+        self.githubql_index = kwargs.get('github-params').get('githubql_index')
         self.github2_issues_enriched_index = kwargs.get('github-params').get('github2_issues_enriched_index')
         self.github2_pull_enriched_index = kwargs.get('github-params').get('github2_pull_enriched_index')
         self.combined_users = set()
@@ -540,7 +540,7 @@ class ConversionRateMetricsModel(MetricsModel):
                         repos_list.append(all_repo_json[project][j][0]) 
                         # In repository case, the dictionary is 1 item long only
                         self.github_repos = {all_repo_json[project][j][0] : project}  # dict[repo link str, project name str] 
-                        self.metrics_model_enrich(label, self.out_index_base + "_" + all_repo_json[project][j][0][-1])
+                        self.metrics_model_enrich(label, self.out_index_base + "_" + all_repo_json[project][j][0].split('/')[-1])
                         # conversion_rate_model = aggregate.Aggregate(**CONF)
                         # d2, d1 = conversion_rate_model.get_contributors()
                         # converters_all = []
