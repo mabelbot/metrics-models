@@ -26,9 +26,8 @@ MAX_BULK_UPDATE_SIZE = 100
 
 
 class Aggregate():
-    def __init__(self, **kwargs):
-        self.es = Elasticsearch("http://localhost:9200", use_ssl=False, verify_certs=False, ssl_no_validate=True,
-                        connection_class=RequestsHttpConnection)
+    def __init__(self, *args, **kwargs):
+        self.es = Elasticsearch("http://localhost:9200", use_ssl=False, verify_certs=False, ssl_no_validate=True, connection_class=RequestsHttpConnection)
 
         logging.basicConfig(filename='aggregate.log', filemode='w',
                             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s - [AGGREGATE.PY]', level=logging.INFO)
@@ -38,7 +37,7 @@ class Aggregate():
         # Set Parameters from Imported Config File
         self.d1_cutoff = kwargs.get('conversion-params').get('denominator-cutoff')
         self.d2_cutoff = kwargs.get('conversion-params').get('numerator-cutoff')
-        self.out_index_name = kwargs.get('conversion-params').get('final-out-index')
+        self.out_index_name = kwargs.get('conversion-params').get('final-out-index') + "_" + args[0]
         self.from_date = kwargs.get('tracking-params').get('from_date')
         if not from_date:
             from_date = '1970-01-01'

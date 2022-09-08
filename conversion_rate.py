@@ -539,12 +539,15 @@ class ConversionRateMetricsModel(MetricsModel):
                     if j in self.data_sources:
                         repos_list.append(all_repo_json[project][j][0]) 
                         # In repository case, the dictionary is 1 item long only
-                        self.github_repos = {all_repo_json[project][j][0] : project}  # dict[repo link str, project name str] 
+                        self.github_repos = {all_repo_json[project][j][0] : project}  # dict[repo link str, project name str]
                         self.metrics_model_enrich(label, self.out_index_base + "_" + all_repo_json[project][j][0].split('/')[-1])
-                        # conversion_rate_model = aggregate.Aggregate(**CONF)
-                        # d2, d1 = conversion_rate_model.get_contributors()
-                        # converters_all = []
-                        # helpers.bulk(conversion_rate_model.es, conversion_rate_model.calculate_cr_series(d2, d1, converters_all))
+
+                        args = [all_repo_json[project][j][0].split('/')[-1]]
+                        # Calculate actual conversion rate by aggregation
+                        aggregate_conversion_rate = aggregate.Aggregate(args, **CONF)
+                        d2, d1 = aggregate_conversion_rate.get_contributors()
+                        converters_all = []
+                        helpers.bulk(aggregate_conversion_rate.es, aggregate_conversion_rate.calculate_cr_series(d2, d1, converters_all))
             
 
 class Mapping(BaseMapping):
