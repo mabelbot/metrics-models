@@ -16,7 +16,8 @@ def merge_wrapper(ids_to_merge):
 
 #
 db = Database('root', '', 'test_sh')
-# sgoggins = api.search_unique_identities(db=db, term='caifand', source='githubql')
+# sgoggins = api.search_unique_identities(db=db, term='hqrshguptq')
+
 # print(sgoggins) # should return [44bdeb72febce7cd43244acdee5dab8dd6a702d8, e12ec3126952dc0a8edebd5f122c388ff53bf9f2]
 # for profile in list(api.search_profiles(db=db)):
     # if 'sgoggins' in str(profile):
@@ -65,7 +66,11 @@ def combine_identities(term, sources):
         except sortinghat.exceptions.NotFoundError:
             pass
     merge_wrapper(unique_identities) #TODO get rid of duplicates
-    return api.search_unique_identities(db=db, term=term, source=sources[0]) #TODO can this ever return >1
+    try:
+        return api.search_unique_identities(db=db, term=term, source=sources[0])  # TODO can this ever return >1
+    except sortinghat.exceptions.NotFoundError:
+        return -1
+
 
 
 # print(combine_identities('sgoggins', ['githubql', 'github']))
