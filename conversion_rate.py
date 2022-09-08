@@ -436,7 +436,7 @@ class ConversionRateMetricsModel(MetricsModel):
                 # Combine SortingHat uuids but only if they have not been combined before to save time
                 if hit['_source.user_login'] not in self.combined_users:
                     identities.combine_identities(hit['_source.user_login'], ['github', 'githubql',
-                                                                              'github2'])  # info: This is only relevant if an identity is present in both GH and GHQL
+                                                                              'github2'])  # info: This is only relevant if an identity is present in both GH and GHQL (TODO replace w instance var)
                     self.combined_users.add(hit['_source.user_login'])
                     logging.info(f"Finished combine for this user - {hit['_source.user_login']}")
 

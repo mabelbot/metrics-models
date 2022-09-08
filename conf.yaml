@@ -5,7 +5,7 @@ general:
     level: repo
     out_index_base: github_event_enriched_combined
     data_sources: ['github', 'githubql', 'github2'] # Can add however many desired
-    run_combine: False
+    run_combine: True
 
 tracking-params:
     tracking_interval_num_months: 6 
@@ -29,15 +29,15 @@ github-params:
 #    'issue_index': Issue index (for this metric we do not need to consider a single issue index)
 #    'json_file': json file for repos messages
 #    'git_index': git index
-    'github_index': github_issues_chaoss_enriched
-    'githubql_index': github_event_enriched
-    'github2_issues_enriched_index': github2-issues_enriched
-    'github2_pull_enriched_index': github2_prs_enriched
+    github_index: github_issues_chaoss_enriched
+    githubql_index: github_event_enriched
+    github2_issues_enriched_index: github2-issues_enriched
+    github2_pull_enriched_index: github2_prs_enriched
 #    'git_branch': None
 #    'from_date': '2020-01-01'
 #    'end_date': None
 #    'community': None
-    'level': 'repo'
+    level: 'repo'
     'all_event_types_analyzed': ['CreatedEvent', 'AddedToProjectEvent', 'ClosedEvent', 'LabeledEvent', 'CrossReferencedEvent',
                         'MovedColumnsInProjectEvent', 'RemovedFromProjectEvent', 'UnlabeledEvent', 'CreatedPREvent', 
                         'PullRequestReview', 'MergedEvent', 'UpdatedCommentOnIssueEvent', 'UpdatedCommentOnPREvent']

@@ -2,6 +2,9 @@
     "test_project": {
         "github": [
             "https://github.com/chaoss/augur"
+        ],
+        "github": [
+            "https://github.com/chaoss/grimoirelab-perceval"
         ]
     },
     "gitee-mindspore": {
