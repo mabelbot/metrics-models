@@ -41,7 +41,7 @@ class Aggregate():
         self.project_name = args[1]
         self.out_index_base = kwargs.get('general').get('out_index_base')
         self.index_to_query_suffix = args[2]
-        self.out_index_name = kwargs.get('conversion-params').get('final-out-index') + "_" + self.repo_name
+        self.out_index_name = kwargs.get('conversion-params').get('final-out-index') + '_' + self.repo_name + '_' + self.project_name
         self.from_date = kwargs.get('tracking-params').get('from_date')
         if not self.from_date:
             from_date = '1970-01-01'
