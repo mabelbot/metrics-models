@@ -108,7 +108,8 @@ class ConversionRateMetricsModel(MetricsModel):
         self.from_date = kwargs.get('tracking-params').get('from_date')
         self.level = kwargs.get('general').get('level')
         logging.info(f'Analyzing at level: {self.level}')
-        
+
+        self.run_combine = kwargs.get('general').get('run_combine')
         self.out_index_base = kwargs.get('general').get('out_index_base')
         self.data_sources = kwargs.get('general').get('data_sources')
 
@@ -184,6 +185,7 @@ class ConversionRateMetricsModel(MetricsModel):
     def metrics_model_enrich(self, label, out_index):
         """Wrapper for methods metrics_model_combine_indexes_github and metrics_models_combine_github2_prs """
         logging.info(f'Entered metrics_model_enrich method with label {label} and out_index {out_index}')
+        es_out = ElasticSearch(elastic_url, index=out_index, mappings=Mapping(), clean=True)
         self.metrics_model_combine_indexes_github(label, out_index)
         self.metrics_models_combine_github2_prs(label, out_index)
 
@@ -205,7 +207,7 @@ class ConversionRateMetricsModel(MetricsModel):
 
         Use Actor ID to track events.
         """
-        es_out = ElasticSearch(elastic_url, index=out_index, mappings=Mapping(), clean=True)
+        es_out = ElasticSearch(elastic_url, index=out_index, mappings=Mapping(), clean=False)
         item_datas = []
         logging.info('Begin at combine indexes')
 
@@ -406,7 +408,7 @@ class ConversionRateMetricsModel(MetricsModel):
         :param self: self
         :returns: None (in place modification only)
         """
-        es_out = ElasticSearch(elastic_url, index=out_index, mappings=Mapping(), clean=True)
+        es_out = ElasticSearch(elastic_url, index=out_index, mappings=Mapping(), clean=False)
         item_datas = []
         logging.info('Begin method: metrics_models_combine_github2_prs')
         # test_set = set()
@@ -523,11 +525,7 @@ class ConversionRateMetricsModel(MetricsModel):
                         repos_list.append(all_repo_json[project][j][0])
                         self.github_repos[all_repo_json[project][j][0]] = project # Add to  dict[repo link str, project name str] 
                 self.metrics_model_enrich(label, self.out_index_base + "_" + project)
-                # conversion_rate_model = aggregate.Aggregate(**CONF)
-                # d2, d1 = conversion_rate_model.get_contributors()
-                # converters_all = []
-                # helpers.bulk(conversion_rate_model.es, conversion_rate_model.calculate_cr_series(d2, d1, converters_all))
-    
+                # Place aggregate code here
 
         # Enriches all repos provided, each considered individually
         if self.level == "repo": 
@@ -539,12 +537,14 @@ class ConversionRateMetricsModel(MetricsModel):
                     if j in self.data_sources:
                         repos_list.append(all_repo_json[project][j][0]) 
                         # In repository case, the dictionary is 1 item long only
-                        self.github_repos = {all_repo_json[project][j][0] : project}  # dict[repo link str, project name str]
-                        self.metrics_model_enrich(label, self.out_index_base + "_" + all_repo_json[project][j][0].split('/')[-1])
+                        if self.run_combine:
+                            logging.info("Running combine")
+                            self.github_repos = {all_repo_json[project][j][0] : project}  # dict[repo link str, project name str]
+                            self.metrics_model_enrich(label, self.out_index_base + "_" + all_repo_json[project][j][0].split('/')[-1])
 
-                        args = [all_repo_json[project][j][0].split('/')[-1]]
+                        args = [all_repo_json[project][j][0].split('/')[-1], project, all_repo_json[project][j][0].split('/')[-1]]
                         # Calculate actual conversion rate by aggregation
-                        aggregate_conversion_rate = aggregate.Aggregate(args, **CONF)
+                        aggregate_conversion_rate = aggregate.Aggregate(*args, **CONF)
                         d2, d1 = aggregate_conversion_rate.get_contributors()
                         converters_all = []
                         helpers.bulk(aggregate_conversion_rate.es, aggregate_conversion_rate.calculate_cr_series(d2, d1, converters_all))

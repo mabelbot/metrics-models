@@ -4,6 +4,8 @@ general:
     json_file: projects.json
     level: repo
     out_index_base: github_event_enriched_combined
+    data_sources: ['github', 'githubql', 'github2'] # Can add however many desired
+    run_combine: False
 
 tracking-params:
     tracking_interval_num_months: 6 
@@ -21,7 +23,6 @@ conversion-params:
                         'MovedColumnsInProjectEvent', 'RemovedFromProjectEvent', 'UnlabeledEvent', 'CreatedPREvent', 
                         'PullRequestReview', 'MergedEvent', 'UpdatedCommentOnPREvent']
     allow_multiple_conversions: False
-    data_sources: ['github', 'githubql', 'github2'] # Can add however many desired
     # numerator_events must not be a superset of denominator_events or else conversion rates can hit 1 erroneously and not be useful for interpretation
 
 github-params:        

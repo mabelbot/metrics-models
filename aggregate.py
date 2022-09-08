@@ -37,9 +37,13 @@ class Aggregate():
         # Set Parameters from Imported Config File
         self.d1_cutoff = kwargs.get('conversion-params').get('denominator-cutoff')
         self.d2_cutoff = kwargs.get('conversion-params').get('numerator-cutoff')
-        self.out_index_name = kwargs.get('conversion-params').get('final-out-index') + "_" + args[0]
+        self.repo_name = args[0]
+        self.project_name = args[1]
+        self.out_index_base = kwargs.get('general').get('out_index_base')
+        self.index_to_query_suffix = args[2]
+        self.out_index_name = kwargs.get('conversion-params').get('final-out-index') + "_" + self.repo_name
         self.from_date = kwargs.get('tracking-params').get('from_date')
-        if not from_date:
+        if not self.from_date:
             from_date = '1970-01-01'
 
         # Number of months to look back for contributor interval
@@ -54,7 +58,6 @@ class Aggregate():
         self.allow_multiple_conversions = kwargs.get('conversion-params').get('allow_multiple_conversions')
 
         print(f"Cutoffs {self.d1_cutoff}, {self.d2_cutoff} / tracking period {self.tracking_lag_period} months")
-
 
         # Make sure index clean before use if exists (syntax will be different in ES v. 8+)
         self.es.indices.delete(index=self.out_index_name, ignore=[400, 404])
@@ -135,13 +138,13 @@ class Aggregate():
         # bucket's start date, at 11:59pm
         # The types of contributions filtered with the numerator and denominator are different, so they will need different queries
         # TODO adjust this to work with less in-memory computation
-        self.time_buckets_denominator = self.es.search(index="github_event_enriched_combined",
+        self.time_buckets_denominator = self.es.search(index=self.out_index_base + "_" + self.index_to_query_suffix,
                         size=2,
                         query=query_denominator,
                         sort=sort,
                         aggs=aggs)['aggregations']['contribs_over_time']['buckets']
 
-        self.time_buckets_numerator= self.es.search(index="github_event_enriched_combined",
+        self.time_buckets_numerator = self.es.search(index=self.out_index_base + "_" + self.index_to_query_suffix,
                         size=2,
                         query=query_numerator,
                         sort=sort,
@@ -274,7 +277,9 @@ class Aggregate():
         :param denomiantors: Output from get_contributors (dict[datetime, dict[str, int]])
         :returns: None
         """
-        assert len(denominators) - len(numerators) == 1
+        print(len(denominators))
+        print(len(numerators))
+        assert len(denominators) - len(numerators) == 1 or len(denominators) == 0
         numerators = collections.OrderedDict(sorted(numerators.items()))
         denominators = collections.OrderedDict(sorted(denominators.items()))
         logging.info(f"Numerators length {len(numerators)} and denominators length {len(denominators)}")
@@ -304,7 +309,9 @@ class Aggregate():
                     'conversion_rate': len(converters) / len(denominators[timestamps[i]])
                         if len(denominators[timestamps[i]]) else float(0),
                     'num_converters': int(len(converters)),
-                    'converters': list(converters)
+                    'converters': list(converters),
+                    'repo_name': self.repo_name,
+                    'project_name': self.project_name
                 }
             }
             yield doc
