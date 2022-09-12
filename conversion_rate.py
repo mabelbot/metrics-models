@@ -541,7 +541,7 @@ class ConversionRateMetricsModel(MetricsModel):
                             logging.info("Running combine")
                             self.github_repos = {all_repo_json[project][j][0] : project}  # dict[repo link str, project name str]
                             self.metrics_model_enrich(label, self.out_index_base + "_" + all_repo_json[project][j][0].split('/')[-1])
-
+                        
                         args = [all_repo_json[project][j][0].split('/')[-1], project, all_repo_json[project][j][0].split('/')[-1]]
                         # Calculate actual conversion rate by aggregation
                         aggregate_conversion_rate = aggregate.Aggregate(*args, **CONF)

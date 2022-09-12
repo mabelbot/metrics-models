@@ -10,7 +10,12 @@ import collections
 from collections import deque
 import logging
 
+import sortinghat.exceptions
+from sortinghat import api
+from sortinghat.db.database import Database
+
 MAX_BULK_UPDATE_SIZE = 100
+db = Database('root', '', 'test_sh')
 
 # TODO
 # Deal with issues -> pull requests later.
@@ -41,8 +46,10 @@ class Aggregate():
         self.project_name = args[1]
         self.out_index_base = kwargs.get('general').get('out_index_base')
         self.index_to_query_suffix = args[2]
-        self.out_index_name = kwargs.get('conversion-params').get('final-out-index') + '_' + self.repo_name + '_' + self.project_name
+        self.final_out_index_name = kwargs.get('conversion-params').get('final-out-index') # Just the base name
         self.from_date = kwargs.get('tracking-params').get('from_date')
+        self.append = kwargs.get('conversion-params').get('append')
+
         if not self.from_date:
             from_date = '1970-01-01'
 
@@ -60,7 +67,9 @@ class Aggregate():
         print(f"Cutoffs {self.d1_cutoff}, {self.d2_cutoff} / tracking period {self.tracking_lag_period} months")
 
         # Make sure index clean before use if exists (syntax will be different in ES v. 8+)
-        self.es.indices.delete(index=self.out_index_name, ignore=[400, 404])
+        if not self.append:
+            logging.info('Appending new conversion rates to out index')
+            self.es.indices.delete(index=self.final_out_index_name + "_project_" + self.project_name, ignore=[400, 404])
 
 
         # Prepare queries
@@ -297,12 +306,15 @@ class Aggregate():
             if not self.allow_multiple_conversions: 
                 has_converted_before.update(converters) # Update "converted" set with current converters
 
+
             logging.info(f"By the end of month {date} these people converted {converters}")
+
+            converters = [api.unique_identities(db, uuid=i)[0].profile.name for i in list(converters)]
 
             logging.info(f"Converters for {date} are {list(converters)}")
 
             doc = {
-                "_index": self.out_index_name,
+                "_index": self.final_out_index_name + "_project_" + self.project_name,
                 "_type": "_doc",
                 "_source": {
                     'date_of_conversion': date,

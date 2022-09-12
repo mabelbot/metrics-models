@@ -74,8 +74,8 @@ def combine_identities(term, sources):
 
 
 # print(combine_identities('sgoggins', ['githubql', 'github']))
-#api.search_unique_identities(db=db, term='sgoggins', source='github')
-
+# api.search_unique_identities(db=db, term='6df49fe2ade16f0954712839a8ddf4d680663209')
+print(api.unique_identities(db, uuid='6df49fe2ade16f0954712839a8ddf4d680663209')[0].profile.name)
 
 
 
